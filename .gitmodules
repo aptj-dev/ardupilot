@@ -19,6 +19,6 @@
 [submodule "gtest"]
 	path = modules/gtest
 	url = git://github.com/ArduPilot/googletest
-[submodule "paho.mqtt.c"]
-	path = paho.mqtt.c
+[submodule "modules/paho.mqtt.c"]
+	path = modules/paho.mqtt.c
 	url = https://github.com/eclipse/paho.mqtt.c
