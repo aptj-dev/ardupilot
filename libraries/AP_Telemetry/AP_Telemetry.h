@@ -39,6 +39,7 @@ public:
 
     // update - provide an opportunity to read/send telemetry
     void update();
+    int recv_mavlink_message(mavlink_message_t *msg);
 
 
     // send text
