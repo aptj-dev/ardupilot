@@ -35,11 +35,23 @@ void AP_Telemetry::init(const AP_SerialManager &serial_manager, const AP_AHRS &a
 
     // check for supported protocols
     AP_HAL::UARTDriver *uart;
-    if ((uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_MQTT, 0)) != nullptr) {
+    if ((uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_MQTT, 0)) == nullptr) {
         _drivers[_num_instances] = new AP_Telemetry_MQTT(*this, uart);
         _num_instances++;
     }
 }
+
+
+void AP_Telemetry::send_text(const char *str) 
+{
+    for (uint8_t i=0; i<AP_TELEMETRY_MAX_INSTANCES; i++) {
+        if (_drivers[i] != nullptr) {
+            _drivers[i]->send_text(str);
+        }
+    }
+
+}
+
 
 // provide an opportunity to read/send telemetry
 void AP_Telemetry::update()
