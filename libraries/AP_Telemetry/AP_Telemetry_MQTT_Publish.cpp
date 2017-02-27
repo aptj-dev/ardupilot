@@ -20,9 +20,12 @@
 
 #define ADDRESS     "tcp://160.16.96.11:8883"
 
-#define CLIENTID    "ExampleClientPub"
-#define TOPIC       "MQTT Examples"
-#define PAYLOAD     "Hello World!"
+//#define CLIENTID    "ExampleClientPub"
+//#define TOPIC       "MQTT Examples"
+//#define PAYLOAD     "Hello World!"
+char clientid_pub[100];
+char topic_pub[100];
+
 #define QOS         1
 #define TIMEOUT     10000L
 
@@ -133,7 +136,7 @@ void start_send_text(void* context, const char *str)
 	pubmsg.retained = 0;
 	deliveredtoken = 0;
       
-	if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
+	if ((rc = MQTTAsync_sendMessage(client, topic_pub, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start sendMessage, return code %d\n", rc);
 		//exit(EXIT_FAILURE);
@@ -150,7 +153,7 @@ void *start_connect()
 	MQTTAsync_token token;
 	int rc;
 
-	MQTTAsync_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+	MQTTAsync_create(&client, ADDRESS, clientid_pub, MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
 	MQTTAsync_setCallbacks(client, NULL, connlost, NULL, NULL);
         
