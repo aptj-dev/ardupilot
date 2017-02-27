@@ -96,6 +96,10 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         ret = 1;
     } else if (strncmp(cmd, "takeoff", 7) == 0){
         float takeoff_alt = 20;// param7
+        if(strlen(cmd) >= 9 ) 
+        {
+            takeoff_alt = atof(&cmd[8]);
+        }
         float hnbpa = 1.0; // param 3 horizontal navigation by pilot acceptable
         memset(msg, 0, sizeof(mavlink_message_t));
         msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
@@ -146,13 +150,37 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         _mav_put_float(buf, 8, mission_item.param3);
 	mission_item.param4 = 0.0; // 12 float
         _mav_put_float(buf, 12, mission_item.param4);
-	mission_item.x = -35.362789; // 16 float
-        _mav_put_float(buf, 16,mission_item.x);
+        if(strlen(cmd) >= 7 )
+        { 
+             char *token;
+             token = strtok(&cmd[6], ",");
+             if(token != nullptr)
+             {
+                 mission_item.x = atof(token); // 16 float
+             } else {
+                 return 0;
+             }
+             token = strtok(nullptr, ",");
+             if(token != nullptr)
+             {
+                 mission_item.y = atof(token); // 16 float
+             } else {
+                 return 0;
+             }
+             token = strtok(nullptr, ",");
+             if(token != nullptr)
+             {
+                 mission_item.z = atof(token); // 16 float
+             } else {
+                 return 0;
+             }
+            
+        }
 
-	mission_item.y = 149.164368; // 20 float
+        _mav_put_float(buf, 16,mission_item.x);
         _mav_put_float(buf, 20,mission_item.y);
-	mission_item.z = 100.000000; // 24 float
         _mav_put_float(buf, 24,mission_item.z);
+
 	mission_item.seq = 0;// 28 uint16
         _mav_put_uint16_t(buf, 28, mission_item.seq);
 
