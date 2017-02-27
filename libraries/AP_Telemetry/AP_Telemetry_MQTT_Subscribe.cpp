@@ -30,9 +30,13 @@
 
 
 #define ADDRESS     "tcp://160.16.96.11:8883"
-#define CLIENTID    "ExampleClientSub"
-#define TOPIC       "MQTT Examplessub"
-#define PAYLOAD     "Hello World!"
+//#define CLIENTID    "ExampleClientSub"
+//#define TOPIC       "MQTT Examplessub"
+//#define PAYLOAD     "Hello World!"
+char clientid_sub[100];
+char topic_sub[100];
+
+
 #define QOS         1
 #define TIMEOUT     10000L
 
@@ -139,7 +143,7 @@ void onConnect_sub(void* context, MQTTAsync_successData* response)
 	printf("Successful connection\n");
 
 	printf("Subscribing to topic %s\nfor client %s using QoS%d\n\n"
-           "Press Q<Enter> to quit\n\n", TOPIC, CLIENTID, QOS);
+           "Press Q<Enter> to quit\n\n", topic_sub, clientid_sub, QOS);
 	opts.onSuccess = onSubscribe_sub;
 	opts.onFailure = onSubscribeFailure_sub;
 	opts.context = client;
@@ -149,7 +153,7 @@ void onConnect_sub(void* context, MQTTAsync_successData* response)
         finished_sub = 0;
         disc_finished = 0;
 
-	if ((rc = MQTTAsync_subscribe(client, TOPIC, QOS, &opts)) != MQTTASYNC_SUCCESS)
+	if ((rc = MQTTAsync_subscribe(client, topic_sub, QOS, &opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start subscribe, return code %d\n", rc);
 		//exit(EXIT_FAILURE);
@@ -204,7 +208,7 @@ int start_subscribe(void)
 	int ch;
 	MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
 
-	MQTTAsync_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+	MQTTAsync_create(&client, ADDRESS, clientid_sub, MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
 	MQTTAsync_setCallbacks(client, NULL, connlost_sub, msgarrvd_sub, NULL);
 
