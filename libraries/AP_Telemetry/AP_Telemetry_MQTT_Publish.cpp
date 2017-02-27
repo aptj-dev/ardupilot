@@ -31,8 +31,8 @@ char topic_pub[100];
 
 volatile MQTTAsync_token deliveredtoken;
 
-int finished = 0;
-int connected = 0;
+int finished_pub = MQTT_PUB_NONFINISHED;
+int connected_pub = MQTT_PUB_DISCONNECTED;
 char msg_payload[100];
 
 void connlost(void *context, char *cause)
@@ -53,7 +53,7 @@ void connlost(void *context, char *cause)
 	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start connect, return code %d\n", rc);
- 		finished = 1;
+ 		finished_pub = MQTT_PUB_FINISHED;
 	}
 }
 
@@ -62,7 +62,7 @@ void onDisconnect(void* context, MQTTAsync_successData* response)
 {
 	printf("Successful disconnection\n");
 
-	finished = 1;
+	finished_pub = MQTT_PUB_FINISHED;
 }
 
 
@@ -88,7 +88,7 @@ void onSend(void* context, MQTTAsync_successData* response)
 void onConnectFailure(void* context, MQTTAsync_failureData* response)
 {
 	printf("Connect failed, rc %d\n", response ? response->code : 0);
-	finished = 1;
+	finished_pub = MQTT_PUB_FINISHED;
 }
 
 
@@ -109,7 +109,7 @@ void onConnect(void* context, MQTTAsync_successData* response)
 	//pubmsg.qos = QOS;
 	//pubmsg.retained = 0;
 	deliveredtoken = 0;
-        connected = 1;
+        connected_pub = MQTT_PUB_CONNECTED;
 
 	//if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
 	//{

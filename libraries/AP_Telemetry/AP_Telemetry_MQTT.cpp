@@ -22,8 +22,8 @@
 extern const AP_HAL::HAL& hal;
 
 extern void start_send(char *buf);
-extern int finished;
-extern int connected;
+extern int finished_pub;
+extern int connected_pub;
 
 extern int disc_finished;
 extern int sub_connect_stat;
@@ -52,10 +52,10 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
     printf("AP_Telemetry_MQTT");
     init_subscribe();
 
-    connect_timer = 20;
-    stage = 3;
-    connect_timer_sub = 20;
-    stage_sub = 2;
+    connect_timer_pub = MQTT_PUB_INITIAL_TIMER;
+    stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
+    connect_timer_sub = MQTT_SUB_INITIAL_TIMER;
+    stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
 
     srand((unsigned)time(NULL));
     sprintf(clientid_pub, "%d", rand() % 10000);
@@ -68,7 +68,9 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
 void AP_Telemetry_MQTT::send_text(const char *str) 
 {
     
-    if((connected == 1) && (finished == 0) && (stage == 2) && (client != NULL))
+    if((connected_pub == MQTT_PUB_CONNECTED) && 
+       (finished_pub == MQTT_PUB_NONFINISHED) && (stage_pub == MQTT_PUB_STAGE_CONNECTED) && 
+       (client != NULL))
     {
         sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d", mavlink_system.sysid);
         start_send_text(client, str);
@@ -213,7 +215,9 @@ int AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
     int ret;
     char str_mqtt[200];
     ret = 0;
-    if((stage_sub == 1) && (sub_connect_stat == 2) && (finished_sub == 0) &&
+    if((stage_sub == MQTT_SUB_STAGE_SUBSCRIBED) && 
+       (sub_connect_stat == MQTT_SUB_STATUS_SUBSCRIBED) && 
+       (finished_sub == MQTT_SUB_NONFINISHED) &&
        (disc_finished == 0))
     {
         ret = recv_data(str_mqtt);
@@ -247,65 +251,71 @@ void AP_Telemetry_MQTT::update()
                     (long)loc.lng,
                     (long)loc.alt);
             
-            switch (stage)
+            switch (stage_pub)
             {
-                case 0://stage disconnect
+                case MQTT_PUB_STAGE_INITIAL://stage disconnect
 
                     client = start_connect();
                     if(client != NULL)
                     {
-                        stage = 1;// waiting for connection finish
+                        stage_pub = MQTT_PUB_STAGE_WAIT_CONNECT;// waiting for connection finish
                     }
                     break;
-                case 1:
-                    if (connected == 1)
+                case MQTT_PUB_STAGE_WAIT_CONNECT:
+                    if (connected_pub == MQTT_PUB_CONNECTED)
                     {
-                        stage = 2;
+                        stage_pub = MQTT_PUB_STAGE_CONNECTED;
                     }
                     break;
-                case 2:
-                    if(finished == 1)
+                case MQTT_PUB_STAGE_CONNECTED:
+                    if(finished_pub == MQTT_PUB_FINISHED)
                     {
                         MQTTAsync_destroy(&client);
-                        stage = 3;
-                        connect_timer = 10;
+                        stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
+                        connect_timer_pub = MQTT_PUB_RECONNECT_TIMER;
                     }
                     break;
-                case 3:
-                    if(connect_timer > 0)
+                case MQTT_PUB_STAGE_WAIT_RECONNECT:
+                    if(connect_timer_pub > 0)
                     {
-                        connect_timer--;
+                        connect_timer_pub--;
                     } else {
-                        stage = 0;
+                        stage_pub = MQTT_PUB_STAGE_INITIAL;
                     }
                     break;
                
             }
             switch (stage_sub)
             {
-                case 0:
-                    if (sub_connect_stat == 0)
+                case MQTT_SUB_STAGE_INITIAL:
+                    if (sub_connect_stat == MQTT_SUB_STATUS_INITIAL)
                     {
                         sprintf(topic_sub,"$ardupilot/copter/quad/command/%04d/#", mavlink_system.sysid);
                         start_subscribe();
-                        stage_sub = 1;
+                        stage_sub = MQTT_SUB_STAGE_WAIT_SUBSCRIBED;
                         
                     }
                     break;
-                case 1:
-                    if((finished_sub == 1) || (disc_finished == 1))
+                case MQTT_SUB_STAGE_WAIT_SUBSCRIBED:
+                    if(sub_connect_stat == MQTT_SUB_STATUS_SUBSCRIBED)
                     {
-                        connect_timer_sub = 10;
-                        stage_sub = 2;
+                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
+                        stage_sub = MQTT_SUB_STAGE_SUBSCRIBED;
                     }
                     break;
-                case 2:
+                case MQTT_SUB_STAGE_SUBSCRIBED:
+                    if((disc_finished == 1) || (finished_sub == MQTT_SUB_FINISHED))
+                    {
+                        stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
+                    }
+                    break;
+                case MQTT_SUB_STAGE_WAIT_RESUBSCRIBE:
                     if(connect_timer_sub > 0)
                     {
                         connect_timer_sub--;
                     } else {
-                        sub_connect_stat = 0;
-                        stage_sub = 0;
+                        sub_connect_stat = MQTT_SUB_STATUS_INITIAL;
+                        stage_sub = MQTT_SUB_STAGE_INITIAL;
                     }
                     break;
                     
