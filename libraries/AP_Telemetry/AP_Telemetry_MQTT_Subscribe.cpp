@@ -64,17 +64,23 @@ void connlost_sub(void *context, char *cause)
 	printf("\nConnection lost\n");
 	printf("     cause: %s\n", cause);
 
-	printf("Reconnecting\n");
-	conn_opts.keepAliveInterval = 20;
-	conn_opts.cleansession = 1;
-        conn_opts.username = "aptj";
-        conn_opts.password ="aptj-mqtt";
+        if (context != nullptr)
+        { 
+            printf("Reconnecting\n");
+            conn_opts.keepAliveInterval = 20;
+            conn_opts.cleansession = 1;
+            conn_opts.username = "aptj";
+            conn_opts.password ="aptj-mqtt";
 
-	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
-	{
+            if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
+	    {
 		printf("Failed to start connect, return code %d\n", rc);
-	    finished_sub = MQTT_SUB_FINISHED;
-	}
+	        finished_sub = MQTT_SUB_FINISHED;
+            }
+        } else {
+            printf("connlost_sub context is nullptr\n");
+            finished_sub = MQTT_SUB_FINISHED;
+        }
 }
 
 
@@ -221,6 +227,9 @@ int start_subscribe(void)
 	conn_opts.onFailure = onConnectFailure_sub;
 	conn_opts.context = client;
         sub_connect_stat = MQTT_SUB_STATUS_CONNECTING;
+        finished_sub = MQTT_SUB_NONFINISHED;
+        disc_finished = 0;
+
 	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start connect, return code %d\n", rc);
