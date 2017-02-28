@@ -1985,7 +1985,14 @@ void MQTTAsync_closeOnly(Clients* client)
 	if (client->net.socket > 0)
 	{
 		if (client->connected)
-			MQTTPacket_send_disconnect(&client->net, client->clientID);
+		{
+#if defined(WIN32) || defined(WIN64)
+			shutdown(socket, SD_BOTH);
+#else
+			shutdown(socket, SHUT_WR);
+#endif
+			//MQTTPacket_send_disconnect(&client->net, client->clientID);
+		}
 		Thread_lock_mutex(socket_mutex);
 #if defined(OPENSSL)
 		SSLSocket_close(&client->net);
