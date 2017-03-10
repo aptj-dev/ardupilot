@@ -248,7 +248,7 @@ def _build_dynamic_sources(bld):
     bld(
         features='mqtt',
         source=bld.path.make_node('/modules/Mqtt/'),
-        input_dir=bld.path.make_node('/libraries/AP_Telemetry/Mqtt/'),
+        input_dir=bld.path.make_node('/libraries/AP_Telemetry/'),
     )
 
     def write_version_header(tsk):
