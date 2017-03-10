@@ -33,8 +33,7 @@ def build(bld):
             'AP_Gripper',
             'AP_Beacon',
             'AP_Arming',
-            'AP_Telemetry',
-            'AP_Telemetry/Mqtt'
+            'AP_Telemetry'
         ],
     )
 
@@ -50,5 +49,5 @@ def build(bld):
         program_name='arducopter-heli',
         program_groups=['bin', 'copter'],
         use=vehicle + '_libs',
-        defines=['FRAME_CONFIG=HELI_FRAME'],
+        defines=['FRAME_CONFIG=HELI_FRAME','USERHOOK_SUPERSLOWLOOP=1'],
         )
