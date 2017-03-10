@@ -15,7 +15,7 @@
 
 #include "AP_Telemetry_MQTT.h"
 #include <stdio.h>
-#include "Mqtt/MQTTAsync.h"
+#include "MQTTAsync.h"
 
 
 #define ADDRESS     "tcp://160.16.96.11:8883"
