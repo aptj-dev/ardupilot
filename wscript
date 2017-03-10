@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, 'Tools/ardupilotwaf/')
 
 import ardupilotwaf
+import telemetry_mqtt
 import boards
 
 from waflib import Build, ConfigSet, Configure, Context, Utils
@@ -153,6 +154,7 @@ def configure(cfg):
     cfg.load('clang_compilation_database')
     cfg.load('waf_unit_test')
     cfg.load('mavgen')
+    cfg.load('telemetry_mqtt')
 
     cfg.env.SUBMODULE_UPDATE = cfg.options.submodule_update
 
@@ -242,6 +244,12 @@ def _build_dynamic_sources(bld):
             bld.bldnode.make_node('libraries/GCS_MAVLink').abspath(),
         ],
     )
+    
+    bld(
+        features='mqtt',
+        source=bld.path.make_node('/modules/Mqtt/'),
+        input_dir=bld.path.make_node('/libraries/AP_Telemetry/Mqtt/'),
+    )
 
     def write_version_header(tsk):
         bld = tsk.generator.bld
@@ -329,6 +337,9 @@ def _build_post_funs(bld):
 
     if bld.env.SUBMODULE_UPDATE:
         bld.git_submodule_post_fun()
+    
+    # remove Mqtt from AP_Telemetry directory
+    bld.add_post_fun(telemetry_mqtt.cleanup)
 
 def build(bld):
     config_hash = Utils.h_file(bld.bldnode.make_node('ap_config.h').abspath())
