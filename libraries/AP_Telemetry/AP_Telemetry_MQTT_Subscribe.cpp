@@ -15,14 +15,14 @@
 
 #include "AP_Telemetry_MQTT.h"
 #include <stdio.h>
-#include "../../modules/Mqtt/MQTTAsync.h"
+#include "Mqtt/MQTTAsync.h"
 
 /// @cond EXCLUDE
 #if defined(__cplusplus)
  extern "C" {
 #endif
 
-#include "../../modules/Mqtt/LinkedList.h"
+#include "Mqtt/LinkedList.h"
 
 #ifdef __cplusplus
      }
