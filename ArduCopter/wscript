@@ -35,18 +35,11 @@ def build(bld):
             'AP_Arming',
             'AP_VisualOdom',
             'AP_Telemetry',
+            'AP_Telemetry/Mqtt'
         ],
     )
 
     vehicle = bld.path.name
-    bld.ap_stlib(
-        name=vehicle + '_mods',
-        ap_vehicle=vehicle,
-        ap_libraries=[
-            '../modules/Mqtt',
-        ],
-    )
-
     bld.ap_program(
         program_name='arducopter',
         program_groups=['bin', 'copter'],
