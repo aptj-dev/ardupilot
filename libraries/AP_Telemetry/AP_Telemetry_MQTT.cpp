@@ -354,6 +354,7 @@ void AP_Telemetry_MQTT::update()
                     (long)loc.alt);
             
 //printf("stage_pub=%dfinished_pub=%d\n", stage_pub,finished_pub);
+/*
             switch (stage_pub)
             {
                 case MQTT_PUB_STAGE_INITIAL://stage disconnect
@@ -393,6 +394,8 @@ void AP_Telemetry_MQTT::update()
                     break;
                
             }
+*/
+
 printf("stage_sub=%d,finished_sub=%d\n", stage_sub,finished_sub);
             switch (stage_sub)
             {
