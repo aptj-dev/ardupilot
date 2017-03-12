@@ -68,16 +68,16 @@ void Copter::userhook_SuperSlowLoop()
                     (long)loc.lng,
                     (long)loc.alt);
 
-            telemetry.send_text(buf);
+          //  telemetry.send_text(buf);
         }
-
+/*
       mavlink_message_t msg;
 
     if (telemetry.recv_mavlink_message(&msg) != 0)
     {
         gcs[0].handleMessage(&msg);
     }
-
+*/
 
   
 
