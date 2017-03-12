@@ -393,6 +393,7 @@ void AP_Telemetry_MQTT::update()
                     break;
                
             }
+/*
 printf("stage_sub=%d,finished_sub=%d\n", stage_sub,finished_sub);
             switch (stage_sub)
             {
@@ -433,6 +434,7 @@ printf("stage_sub=%d,finished_sub=%d\n", stage_sub,finished_sub);
                     break;
                     
             }
+*/
 
         }
     }
