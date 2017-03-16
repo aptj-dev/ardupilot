@@ -30,7 +30,9 @@ def build(bld):
             'AP_ServoRelayEvents',
             'AP_Avoidance',
             'AP_AdvancedFailsafe',
-            'AP_Proximity'
+            'AP_Proximity',
+            'AP_Telemetry',
+            '../modules/Mqtt'
         ],
     )
 
@@ -44,5 +46,5 @@ def build(bld):
             program_name='arducopter-%s' % frame,
             program_groups=['bin', 'copter'],
             use=vehicle + '_libs',
-            defines=['FRAME_CONFIG=%s' % frame_config],
+            defines=['USERHOOK_SUPERSLOWLOOP=1','FRAME_CONFIG=%s' % frame_config],
         )

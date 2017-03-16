@@ -248,6 +248,14 @@ void Copter::button_update(void)
     g2.button.update();
 }
 
+// update telemetry
+void Copter::update_telemetry(void)
+{
+
+    telemetry.update();
+
+}
+
 // initialise proximity sensor
 void Copter::init_proximity(void)
 {
