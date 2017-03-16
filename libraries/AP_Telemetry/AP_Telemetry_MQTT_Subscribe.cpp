@@ -110,10 +110,12 @@ int msgarrvd_sub(void *context, char *topicName, int topicLen, MQTTAsync_message
     
     rc = pthread_mutex_lock(mqtt_mutex);
 printf("pthread_mutex_lock rc = %d\n", rc);
-    ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
-    rc = pthread_mutex_unlock(mqtt_mutex);
+    if(rc == 0)
+    {
+        ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
+        rc = pthread_mutex_unlock(mqtt_mutex);
 printf("pthread_mutex_unlock rc = %d\n", rc);
-
+    }
     //MQTTAsync_freeMessage(&message);
     MQTTAsync_free(topicName);
     return 1;
@@ -189,9 +191,12 @@ int recv_data(char *str)
     {
         rc = pthread_mutex_lock(mqtt_mutex);
 printf("pthread_mutex_lock rc = %d\n", rc);
-        message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
-        rc = pthread_mutex_unlock(mqtt_mutex);
-printf("pthread_mutex_unlock rc = %d\n", rc);
+        if(rc == 0)
+        {
+            message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
+            rc = pthread_mutex_unlock(mqtt_mutex);
+            printf("pthread_mutex_unlock rc = %d\n", rc);
+        }
         if(message != nullptr) 
         {
             strncpy(str, (char *)message->payload, message->payloadlen);
@@ -213,7 +218,14 @@ printf("pthread_mutex_unlock rc = %d\n", rc);
 void init_subscribe(void)
 {
 
+    pthread_mutexattr_t attr;
+    int rc;
     recv_msg_list = ListInitialize();
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+    if ((rc = pthread_mutex_init(mqtt_mutex, &attr)) != 0)
+        printf("init_subscribe: error %d initializing mqtt_mutex\n", rc);
+
 
 }
 
