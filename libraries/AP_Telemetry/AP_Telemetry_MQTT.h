@@ -19,6 +19,11 @@
 #include <AP_SerialManager/AP_SerialManager.h>
 #include "AP_Telemetry_Backend.h"
 
+// mqtt send_log on / off
+enum Mqtt_send_log {
+    MQTT_SEND_LOG_OFF = 0,
+    MQTT_SEND_LOG_ON  = 1,
+};
 
 // mqtt publish stage (stage_pub)
 enum Mqtt_pub_stage {
