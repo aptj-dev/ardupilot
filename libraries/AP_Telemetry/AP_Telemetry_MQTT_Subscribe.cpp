@@ -199,14 +199,17 @@ printf("pthread_mutex_lock rc = %d\n", rc);
             message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
             rc = pthread_mutex_unlock(mqtt_mutex);
             printf("pthread_mutex_unlock rc = %d\n", rc);
-        }
-        if(message != nullptr) 
-        {
-            strncpy(str, (char *)message->payload, message->payloadlen);
-            str[message->payloadlen] = 0;
-            MQTTAsync_freeMessage(&message);
+            if(message != nullptr) 
+            {
+                strncpy(str, (char *)message->payload, message->payloadlen);
+                str[message->payloadlen] = 0;
+                MQTTAsync_freeMessage(&message);
 
-            ret = 1;
+                ret = 1;
+            } else {
+                strcpy(str, "");
+                ret = 0;   
+            }
         } else {
             strcpy(str, "");
             ret = 0;   
@@ -217,6 +220,7 @@ printf("pthread_mutex_lock rc = %d\n", rc);
     }
     return ret;
 }
+
 
 void init_subscribe(void)
 {
