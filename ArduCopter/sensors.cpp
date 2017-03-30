@@ -264,3 +264,10 @@ void Copter::update_proximity(void)
 #endif
 }
 
+
+// update telemetry
+void Copter::update_telemetry()
+{
+    telemetry.update();
+}
+
