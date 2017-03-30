@@ -8,6 +8,7 @@ class GCS_MAVLINK_Copter : public GCS_MAVLINK
 public:
 
     void data_stream_send(void) override;
+    void handleMessage(mavlink_message_t * msg) override;
 
 protected:
 
@@ -17,7 +18,7 @@ protected:
     
 private:
 
-    void handleMessage(mavlink_message_t * msg) override;
+//    void handleMessage(mavlink_message_t * msg) override;
     bool handle_guided_request(AP_Mission::Mission_Command &cmd) override;
     void handle_change_alt_request(AP_Mission::Mission_Command &cmd) override;
     bool try_send_message(enum ap_message id) override;
