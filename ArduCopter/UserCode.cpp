@@ -40,5 +40,16 @@ void Copter::userhook_SlowLoop()
 void Copter::userhook_SuperSlowLoop()
 {
     // put your 1Hz code here
+        Location loc;
+        if (ahrs.get_position(loc)) {
+            char buf[100];
+            ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
+                    (long)loc.lat,
+                    (long)loc.lng,
+                    (long)loc.alt);
+
+            telemetry.send_text(buf);
+        }
+
 }
 #endif
