@@ -86,6 +86,16 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
             0,0,MAV_CMD_COMPONENT_ARM_DISARM,0,
             1.0,0.0,0.0,0.0,0.0,0.0,0.0);
         ret = 1;
+    } else if(strncmp(cmd, "disarm", 6) == 0) {
+        //disarm コマンド発行
+        memset(msg, 0, sizeof(mavlink_message_t));
+        msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
+        mavlink_msg_command_long_pack_chan(
+            0,0,0,
+            msg,
+            0,0,MAV_CMD_COMPONENT_ARM_DISARM,0,
+            0.0,0.0,0.0,0.0,0.0,0.0,0.0);
+        ret = 1;
     } else if (strncmp(cmd, "takeoff", 7) == 0){
         float takeoff_alt = 20;// param7
         if(strlen(cmd) >= 9 ) 
@@ -113,6 +123,31 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         _mav_put_uint8_t(buf, 5,1);
         memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
         ret = 1;
+    } else if (strncmp(cmd, "mode circle", 11) == 0){
+        //mode guided
+        char buf[30];
+        memset(buf, 0, sizeof(buf));
+        memset(msg, 0, sizeof(mavlink_message_t));
+        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
+        msg->len = 6;
+        _mav_put_uint32_t(buf, 0,7);
+        _mav_put_uint8_t(buf, 4,1);
+        _mav_put_uint8_t(buf, 5,1);
+        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
+        ret = 1;
+    } else if (strncmp(cmd, "mode stabilize", 14) == 0){
+        //mode guided
+        char buf[30];
+        memset(buf, 0, sizeof(buf));
+        memset(msg, 0, sizeof(mavlink_message_t));
+        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
+        msg->len = 6;
+        _mav_put_uint32_t(buf, 0,0);
+        _mav_put_uint8_t(buf, 4,1);
+        _mav_put_uint8_t(buf, 5,1);
+        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
+        ret = 1;
+
 
     } else if (strncmp(cmd, "mode rtl", 8) == 0){
         //mode guided
@@ -142,7 +177,9 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         _mav_put_float(buf, 8, mission_item.param3);
 	mission_item.param4 = 0.0; // 12 float
         _mav_put_float(buf, 12, mission_item.param4);
-
+        mission_item.x = 0;
+        mission_item.y = 0;
+        mission_item.z = 0;
         if(strlen(cmd) >= 7 )
         { 
              char *token;
@@ -193,6 +230,28 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 40);// 30 is about 
 
         ret = 1;
+    } else if(strncmp(cmd, "param set circle_radius", 23) == 0) {
+        mavlink_param_set_t packet1;
+        unsigned char system_id;
+        unsigned char component_id;
+
+        system_id = 0;
+        component_id = 0;
+        memset(&packet1, 0, sizeof(packet1));
+        packet1.param_value = atof(&cmd[23]);;
+        packet1.target_system = 0;
+        packet1.target_component = 0;
+        packet1.param_type = MAV_PARAM_TYPE_REAL32;
+        strcpy(packet1.param_id, "CIRCLE_RADIUS");
+        mavlink_msg_param_set_pack(system_id, 
+            component_id, msg , 
+            packet1.target_system , 
+            packet1.target_component , 
+            packet1.param_id , 
+            packet1.param_value , 
+            packet1.param_type );
+        ret = 1;
+
     }
 
 
