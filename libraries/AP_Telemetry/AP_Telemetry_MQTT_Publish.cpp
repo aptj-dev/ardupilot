@@ -42,17 +42,25 @@ void connlost(void *context, char *cause)
 	printf("\nConnection lost\n");
 	printf("     cause: %s\n", cause);
 
-	printf("Reconnecting\n");
-	conn_opts.keepAliveInterval = 20;
-	conn_opts.cleansession = 1;
-        conn_opts.username = "aptj";
-        conn_opts.password ="aptj-mqtt";
+        if (context != nullptr)
+        {
+	    printf("Reconnecting\n");
+	    conn_opts.keepAliveInterval = 20;
+	    conn_opts.cleansession = 1;
+            conn_opts.username = "aptj";
+            conn_opts.password ="aptj-mqtt";
 
-	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
-	{
+	    if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
+	    {
 		printf("Failed to start connect, return code %d\n", rc);
  		finished_pub = MQTT_PUB_FINISHED;
-	}
+	    }
+        } else {
+		printf("connlost context is nullptr\n");
+ 		finished_pub = MQTT_PUB_FINISHED;
+
+        }        
+
 }
 
 
@@ -108,6 +116,7 @@ void onConnect(void* context, MQTTAsync_successData* response)
 	//pubmsg.retained = 0;
 	deliveredtoken = 0;
         connected_pub = MQTT_PUB_CONNECTED;
+        finished_pub = MQTT_PUB_NONFINISHED;
 
 	//if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
 	//{
@@ -136,8 +145,9 @@ void start_send_text(void* context, const char *str)
       
 	if ((rc = MQTTAsync_sendMessage(client, TOPIC, &pubmsg, &opts)) != MQTTASYNC_SUCCESS)
 	{
-		printf("Failed to start sendMessage, return code %d\n", rc);
+		//printf("Failed to start sendMessage, return code %d\n", rc);
 		//exit(EXIT_FAILURE);
+            finished_pub = MQTT_PUB_FINISHED;
 	}
 
 }
@@ -164,12 +174,16 @@ void *start_connect()
 	conn_opts.onSuccess = onConnect;
 	conn_opts.onFailure = onConnectFailure;
 	conn_opts.context = client;
+
+        finished_pub = MQTT_PUB_NONFINISHED;
+
 	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start connect, return code %d\n", rc);
 		//exit(EXIT_FAILURE);
 	}
 
+printf("start connect \n");
         return client;
 
 
