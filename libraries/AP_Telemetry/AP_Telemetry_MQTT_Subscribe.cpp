@@ -43,9 +43,9 @@ char topic_sub[100];
 volatile MQTTAsync_token deliveredtoken_sub;
 
 int disc_finished = 0;
-int sub_connect_stat = 0;
+int sub_connect_stat = MQTT_SUB_STATUS_INITIAL;
 int subscribed = 0;
-int finished_sub = 0;
+int finished_sub = MQTT_SUB_NONFINISHED;
 //MQTTAsync client_sub;
 
 List* recv_msg_list;
@@ -73,7 +73,7 @@ void connlost_sub(void *context, char *cause)
 	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start connect, return code %d\n", rc);
-	    finished_sub = 1;
+	    finished_sub = MQTT_SUB_FINISHED;
 	}
 }
 
@@ -117,19 +117,20 @@ void onSubscribe_sub(void* context, MQTTAsync_successData* response)
 {
 	printf("Subscribe succeeded\n");
 	subscribed = 1;
+        sub_connect_stat = MQTT_SUB_STATUS_SUBSCRIBED;
 }
 
 void onSubscribeFailure_sub(void* context, MQTTAsync_failureData* response)
 {
 	printf("Subscribe failed, rc %d\n", response ? response->code : 0);
-	finished_sub = 1;
+	finished_sub = MQTT_SUB_FINISHED;
 }
 
 
 void onConnectFailure_sub(void* context, MQTTAsync_failureData* response)
 {
 	printf("Connect failed, rc %d\n", response ? response->code : 0);
-	finished_sub = 1;
+	finished_sub = MQTT_SUB_FINISHED;
 }
 
 
@@ -149,15 +150,15 @@ void onConnect_sub(void* context, MQTTAsync_successData* response)
 	opts.context = client;
 
 	deliveredtoken_sub = 0;
-        sub_connect_stat = 2;
-        finished_sub = 0;
+        sub_connect_stat = MQTT_SUB_STATUS_CONNECTED;
+        finished_sub = MQTT_SUB_NONFINISHED;
         disc_finished = 0;
 
 	if ((rc = MQTTAsync_subscribe(client, topic_sub, QOS, &opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start subscribe, return code %d\n", rc);
 		//exit(EXIT_FAILURE);
-               finished_sub = 1;
+               finished_sub = MQTT_SUB_FINISHED;
 	}
 }
 
@@ -219,11 +220,11 @@ int start_subscribe(void)
 	conn_opts.onSuccess = onConnect_sub;
 	conn_opts.onFailure = onConnectFailure_sub;
 	conn_opts.context = client;
-        sub_connect_stat = 1;
+        sub_connect_stat = MQTT_SUB_STATUS_CONNECTING;
 	if ((rc = MQTTAsync_connect(client, &conn_opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start connect, return code %d\n", rc);
-                finished_sub = 1;
+                finished_sub = MQTT_SUB_FINISHED;
 		//exit(EXIT_FAILURE);
 	}
          return 0;
