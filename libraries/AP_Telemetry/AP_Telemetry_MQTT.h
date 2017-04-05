@@ -22,11 +22,17 @@
 class AP_Telemetry_MQTT : public AP_Telemetry_Backend
 {
 public:
-
+    int stage = 0;
+    void *client;
+    int connect_timer = 0;
     AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
 
     // update - provide an opportunity to read/send telemetry
     void update() override;
+    void send_text(const char *str) override;
+    
+ 
+
 
 private:
 
