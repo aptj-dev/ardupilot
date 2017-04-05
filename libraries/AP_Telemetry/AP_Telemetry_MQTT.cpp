@@ -251,6 +251,7 @@ void AP_Telemetry_MQTT::update()
                     (long)loc.lng,
                     (long)loc.alt);
             
+//printf("stage_pub=%dfinished_pub=%d\n", stage_pub,finished_pub);
             switch (stage_pub)
             {
                 case MQTT_PUB_STAGE_INITIAL://stage disconnect
@@ -265,6 +266,11 @@ void AP_Telemetry_MQTT::update()
                     if (connected_pub == MQTT_PUB_CONNECTED)
                     {
                         stage_pub = MQTT_PUB_STAGE_CONNECTED;
+                    } else if(finished_pub == MQTT_PUB_FINISHED)
+                    {
+                        MQTTAsync_destroy(&client);
+                        stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
+                        connect_timer_pub = MQTT_PUB_RECONNECT_TIMER;
                     }
                     break;
                 case MQTT_PUB_STAGE_CONNECTED:
@@ -285,6 +291,7 @@ void AP_Telemetry_MQTT::update()
                     break;
                
             }
+printf("stage_sub=%d,finished_sub=%d\n", stage_sub,finished_sub);
             switch (stage_sub)
             {
                 case MQTT_SUB_STAGE_INITIAL:
@@ -299,13 +306,17 @@ void AP_Telemetry_MQTT::update()
                 case MQTT_SUB_STAGE_WAIT_SUBSCRIBED:
                     if(sub_connect_stat == MQTT_SUB_STATUS_SUBSCRIBED)
                     {
-                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
                         stage_sub = MQTT_SUB_STAGE_SUBSCRIBED;
+                    } else if(finished_sub == MQTT_SUB_FINISHED)
+                    {
+                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
+                        stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
                     }
                     break;
                 case MQTT_SUB_STAGE_SUBSCRIBED:
                     if((disc_finished == 1) || (finished_sub == MQTT_SUB_FINISHED))
                     {
+                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
                         stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
                     }
                     break;
