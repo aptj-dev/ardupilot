@@ -41,6 +41,10 @@ extern void init_subscribe();
 extern char clientid_pub[100];
 extern char topic_pub[100];
 
+extern char clientid_sub[100];
+extern char topic_sub[100];
+
+
 AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
         AP_Telemetry_Backend(frontend, uart)
 {
@@ -55,6 +59,7 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
 
     srand((unsigned)time(NULL));
     sprintf(clientid_pub, "%d", rand() % 10000);
+    sprintf(clientid_sub, "%d", rand() % 10000);
 
 }
 
@@ -217,6 +222,7 @@ void AP_Telemetry_MQTT::update()
             switch (stage)
             {
                 case 0://stage disconnect
+
                     client = start_connect();
                     if(client != NULL)
                     {
@@ -252,6 +258,7 @@ void AP_Telemetry_MQTT::update()
                 case 0:
                     if (sub_connect_stat == 0)
                     {
+                        sprintf(topic_sub,"$ardupilot/copter/quad/command/%04d/#", mavlink_system.sysid);
                         start_subscribe();
                         stage_sub = 1;
                         
