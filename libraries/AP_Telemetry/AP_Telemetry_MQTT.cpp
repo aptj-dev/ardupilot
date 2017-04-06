@@ -44,6 +44,9 @@ extern char topic_pub[100];
 extern char clientid_sub[100];
 extern char topic_sub[100];
 
+int mqtt_send_log_flag = MQTT_SEND_LOG_OFF;
+int mqtt_send_log_timer_val = 1;
+int mqtt_send_log_timer = 1;
 
 AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
         AP_Telemetry_Backend(frontend, uart)
@@ -67,15 +70,24 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
 
 void AP_Telemetry_MQTT::send_text(const char *str) 
 {
-    
-    if((connected_pub == MQTT_PUB_CONNECTED) && 
-       (finished_pub == MQTT_PUB_NONFINISHED) && (stage_pub == MQTT_PUB_STAGE_CONNECTED) && 
-       (client != NULL))
+    if(mqtt_send_log_flag == MQTT_SEND_LOG_ON)
     {
-        sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d/location", mavlink_system.sysid);
-        start_send_text(client, str);
-    }
-
+        if(mqtt_send_log_timer <= 1)
+        {
+            if((connected_pub == MQTT_PUB_CONNECTED) && 
+               (finished_pub == MQTT_PUB_NONFINISHED) && 
+               (stage_pub == MQTT_PUB_STAGE_CONNECTED) && 
+               (client != NULL))
+            {
+                sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d/location",
+                     mavlink_system.sysid);
+                start_send_text(client, str);
+            }
+            mqtt_send_log_timer = mqtt_send_log_timer_val;
+        } else {
+            mqtt_send_log_timer--;
+        }
+     }
 
 }
 
@@ -290,7 +302,7 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         system_id = 0;
         component_id = 0;
         memset(&packet1, 0, sizeof(packet1));
-        packet1.param_value = atof(&cmd[23]);;
+        packet1.param_value = atof(&cmd[23]);
         packet1.target_system = 0;
         packet1.target_component = 0;
         packet1.param_type = MAV_PARAM_TYPE_REAL32;
@@ -304,6 +316,17 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
             packet1.param_type );
         ret = 1;
 
+    } else if(strncmp(cmd, "mqtt log_off", 12) == 0) {
+        mqtt_send_log_flag = MQTT_SEND_LOG_OFF;
+
+    } else if(strncmp(cmd, "mqtt log_on", 11) == 0) {
+        mqtt_send_log_flag = MQTT_SEND_LOG_ON;
+        mqtt_send_log_timer_val = atoi(&cmd[12]);
+        if (mqtt_send_log_timer_val == 0) 
+        {
+            mqtt_send_log_timer_val = 1;
+        }
+        mqtt_send_log_timer = mqtt_send_log_timer_val;
     }
 
 
