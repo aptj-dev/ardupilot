@@ -136,7 +136,7 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
         _mav_put_uint8_t(buf, 5,1);
         memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
         ret = 1;
-    } else if (strncmp(cmd, "fryto", 5) == 0){
+    } else if (strncmp(cmd, "flyto", 5) == 0){
         char buf[40];
         memset(buf, 0, sizeof(buf));
         memset(msg, 0, sizeof(mavlink_message_t));
