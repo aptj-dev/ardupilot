@@ -115,6 +115,9 @@ printf("pthread_mutex_lock rc = %d\n", rc);
         ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
         rc = pthread_mutex_unlock(mqtt_mutex);
 printf("pthread_mutex_unlock rc = %d\n", rc);
+    } else {
+
+        MQTTAsync_freeMessage(&message);
     }
     //MQTTAsync_freeMessage(&message);
     MQTTAsync_free(topicName);
