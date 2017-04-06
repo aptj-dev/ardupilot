@@ -61,7 +61,7 @@ void Copter::userhook_SuperSlowLoop()
 
 
 
-            ::sprintf(buf,"{id:\"%04d\",time:\"%s\",lat:%ld,lon:%ld,alt:%ld}\n",
+            ::sprintf(buf,"{\"id\":\"%04d\",\"time\":\"%s\",\"lat\":%ld,\"lon\":%ld,\"alt\":%ld}\n",
                     mavlink_system.sysid,
                     timebuf,
                     (long)loc.lat,
