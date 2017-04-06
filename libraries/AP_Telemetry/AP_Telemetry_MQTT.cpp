@@ -72,7 +72,7 @@ void AP_Telemetry_MQTT::send_text(const char *str)
        (finished_pub == MQTT_PUB_NONFINISHED) && (stage_pub == MQTT_PUB_STAGE_CONNECTED) && 
        (client != NULL))
     {
-        sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d", mavlink_system.sysid);
+        sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d/location", mavlink_system.sysid);
         start_send_text(client, str);
     }
 
