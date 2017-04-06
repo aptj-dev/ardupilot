@@ -15,6 +15,8 @@
 
 #include "AP_Telemetry_MQTT.h"
 #include <stdio.h>
+#include <sys/types.h>
+#include <pthread.h>
 #include "../../modules/Mqtt/MQTTAsync.h"
 
 /// @cond EXCLUDE
@@ -50,6 +52,8 @@ int finished_sub = MQTT_SUB_NONFINISHED;
 
 List* recv_msg_list;
 
+static pthread_mutex_t mqtt_mutex_store = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t * mqtt_mutex = &mqtt_mutex_store;
 
 
 void connlost_sub(void *context, char *cause)
@@ -88,6 +92,7 @@ int msgarrvd_sub(void *context, char *topicName, int topicLen, MQTTAsync_message
 {
     int i;
     char* payloadptr;
+    int rc;
 
     printf("Message arrived\n");
     printf("     topic: %s\n", topicName);
@@ -102,10 +107,15 @@ int msgarrvd_sub(void *context, char *topicName, int topicLen, MQTTAsync_message
         putchar(*payloadptr++);
     }
     putchar('\n');
-
-
-    ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
-
+    
+    rc = pthread_mutex_lock(mqtt_mutex);
+printf("pthread_mutex_lock rc = %d\n", rc);
+    if(rc == 0)
+    {
+        ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
+        rc = pthread_mutex_unlock(mqtt_mutex);
+printf("pthread_mutex_unlock rc = %d\n", rc);
+    }
     //MQTTAsync_freeMessage(&message);
     MQTTAsync_free(topicName);
     return 1;
@@ -173,12 +183,20 @@ int recv_data(char *str)
 {
     // we needs semaphore
     int ret = 0;
+    int rc;
     MQTTAsync_message *message;
 
     
     if(recv_msg_list->count != 0)
     {
-        message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
+        rc = pthread_mutex_lock(mqtt_mutex);
+printf("pthread_mutex_lock rc = %d\n", rc);
+        if(rc == 0)
+        {
+            message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
+            rc = pthread_mutex_unlock(mqtt_mutex);
+            printf("pthread_mutex_unlock rc = %d\n", rc);
+        }
         if(message != nullptr) 
         {
             strncpy(str, (char *)message->payload, message->payloadlen);
@@ -200,7 +218,14 @@ int recv_data(char *str)
 void init_subscribe(void)
 {
 
+    pthread_mutexattr_t attr;
+    int rc;
     recv_msg_list = ListInitialize();
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+    if ((rc = pthread_mutex_init(mqtt_mutex, &attr)) != 0)
+        printf("init_subscribe: error %d initializing mqtt_mutex\n", rc);
+
 
 }
 
