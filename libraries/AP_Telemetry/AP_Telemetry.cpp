@@ -42,7 +42,7 @@ void AP_Telemetry::init(const AP_SerialManager &serial_manager, const AP_AHRS &a
 }
 
 
-void AP_Telemetry::send_text(const char *str) 
+void AP_Telemetry::send_text(const char *str)
 {
     for (uint8_t i=0; i<AP_TELEMETRY_MAX_INSTANCES; i++) {
         if (_drivers[i] != nullptr) {
@@ -53,7 +53,7 @@ void AP_Telemetry::send_text(const char *str)
 }
 
 
-int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg) 
+int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
 {
     int ret;
     ret = 0;
@@ -63,7 +63,7 @@ int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
         }
     }
     return ret;
- 
+
 }
 
 

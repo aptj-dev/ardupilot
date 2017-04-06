@@ -15,10 +15,13 @@
 
 #include "AP_Telemetry_MQTT.h"
 #include <stdio.h>
+#include <sys/types.h>
+#include <pthread.h>
 #include <time.h>
 
-
 #include "../../modules/Mqtt/MQTTAsync.h"
+#include "../../modules/Mqtt/LinkedList.h"
+
 extern const AP_HAL::HAL& hal;
 
 extern void start_send(char *buf);
@@ -48,415 +51,148 @@ int mqtt_send_log_flag = MQTT_SEND_LOG_OFF;
 int mqtt_send_log_timer_val = 1;
 int mqtt_send_log_timer = 1;
 
+AP_Telemetry* AP_Telemetry_MQTT::get_MQTTClient(){
+    return mqtt_client;
+}
+
 AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
         AP_Telemetry_Backend(frontend, uart)
 {
+    int rc1;
+    int rc2;
 
-    printf("AP_Telemetry_MQTT");
-    init_subscribe();
+    pthread_mutexattr_t attr;
+    _recv_msg_list = ListInitialize();
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+    if ((rc1 = pthread_mutex_init(mqtt_mutex, &attr)) != 0)
+        printf("init_subscribe: error %d initializing mqtt_mutex\n", rc1);
+    MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
+    MQTTAsync_token token;
 
-    connect_timer_pub = MQTT_PUB_INITIAL_TIMER;
-    stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
-    connect_timer_sub = MQTT_SUB_INITIAL_TIMER;
-    stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
+    MQTTAsync_create(_mqtt_client, ADDRESS, clientid_pub, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+    MQTTAsync_setCallbacks(client, NULL, connlost, mqtt_msg_arrived, NULL);
 
-    srand((unsigned)time(NULL));
-    sprintf(clientid_pub, "%d", rand() % 10000);
-    sprintf(clientid_sub, "%d", rand() % 10000);
+    conn_opts.keepAliveInterval = 20;
+    conn_opts.cleansession = 1;
+    conn_opts.username = "aptj";
+    conn_opts.password ="aptj-mqtt";
 
-}
+    conn_opts.onSuccess = onConnect;
+    conn_opts.onFailure = onConnectFailure;
+    conn_opts.context = *_mqtt_client;
 
-
-
-void AP_Telemetry_MQTT::send_text(const char *str) 
-{
-    if(mqtt_send_log_flag == MQTT_SEND_LOG_ON)
+    if ((rc2 = MQTTAsync_connect(*_mqtt_client, &conn_opts)) != MQTTASYNC_SUCCESS)
     {
-        if(mqtt_send_log_timer <= 1)
-        {
-            if((connected_pub == MQTT_PUB_CONNECTED) && 
-               (finished_pub == MQTT_PUB_NONFINISHED) && 
-               (stage_pub == MQTT_PUB_STAGE_CONNECTED) && 
-               (client != NULL))
-            {
-                sprintf(topic_pub,"$ardupilot/copter/quad/log/%04d/location",
-                     mavlink_system.sysid);
-                start_send_text(client, str);
-            }
-            mqtt_send_log_timer = mqtt_send_log_timer_val;
-        } else {
-            mqtt_send_log_timer--;
-        }
-     }
-
-}
-
-
-int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
-{
-    int ret;
-    ret = 0;
-    printf("received mqtt from Pc %s \n", cmd);
-    if(strncmp(cmd, "arm", 3) == 0)
-    {
-        //arm コマンド発行
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
-        mavlink_msg_command_long_pack_chan(
-            0,0,0,
-            msg,
-            0,0,MAV_CMD_COMPONENT_ARM_DISARM,0,
-            1.0,0.0,0.0,0.0,0.0,0.0,0.0);
-        ret = 1;
-    } else if(strncmp(cmd, "disarm", 6) == 0) {
-        //disarm コマンド発行
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
-        mavlink_msg_command_long_pack_chan(
-            0,0,0,
-            msg,
-            0,0,MAV_CMD_COMPONENT_ARM_DISARM,0,
-            0.0,0.0,0.0,0.0,0.0,0.0,0.0);
-        ret = 1;
-    } else if (strncmp(cmd, "takeoff", 7) == 0){
-        float takeoff_alt = 20;// param7
-        if(strlen(cmd) >= 9 ) 
-        {
-            takeoff_alt = atof(&cmd[8]);
-        }
-        float hnbpa = 1.0; // param 3 horizontal navigation by pilot acceptable
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_COMMAND_LONG;
-        mavlink_msg_command_long_pack_chan(
-            0,0,0,
-            msg,
-            0,0,MAV_CMD_NAV_TAKEOFF,0,
-            0.0,0.0,hnbpa,0.0,0.0,0.0,takeoff_alt);
-        ret = 1;
-    } else if (strncmp(cmd, "mode land", 9) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,9);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-
-    } else if ((strncmp(cmd, "mode alt_hold", 13) == 0) ||
-               (strncmp(cmd, "mode althold", 12) == 0))
-        {
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,2);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-
-    } else if (strncmp(cmd, "mode loiter", 11) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,5);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-
-    } else if (strncmp(cmd, "mode guided", 11) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,4);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-
-    } else if (strncmp(cmd, "mode circle", 11) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,7);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-    } else if (strncmp(cmd, "mode stabilize", 14) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,0);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-
-
-    } else if (strncmp(cmd, "mode rtl", 8) == 0){
-        //mode guided
-        char buf[30];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
-        msg->len = 6;
-        _mav_put_uint32_t(buf, 0,6);
-        _mav_put_uint8_t(buf, 4,1);
-        _mav_put_uint8_t(buf, 5,1);
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
-        ret = 1;
-    } else if (strncmp(cmd, "flyto", 5) == 0){
-        char buf[40];
-        memset(buf, 0, sizeof(buf));
-        memset(msg, 0, sizeof(mavlink_message_t));
-        msg->msgid = MAVLINK_MSG_ID_MISSION_ITEM;
-        msg->len = 36;
-
-	mavlink_mission_item_t mission_item;
-        mission_item.param1 = 0.0; // 0 float
-        _mav_put_float(buf, 0, mission_item.param1);
-	mission_item.param2 = 0.0; // 4 float
-        _mav_put_float(buf, 4, mission_item.param2);
-	mission_item.param3 = 0.0; // 8 float
-        _mav_put_float(buf, 8, mission_item.param3);
-	mission_item.param4 = 0.0; // 12 float
-        _mav_put_float(buf, 12, mission_item.param4);
-        mission_item.x = 0;
-        mission_item.y = 0;
-        mission_item.z = 0;
-        if(strlen(cmd) >= 7 )
-        { 
-             char *token;
-             token = strtok(&cmd[6], ",");
-             if(token != nullptr)
-             {
-                 mission_item.x = atof(token); // 16 float
-             } else {
-                 return 0;
-             }
-             token = strtok(nullptr, ",");
-             if(token != nullptr)
-             {
-                 mission_item.y = atof(token); // 16 float
-             } else {
-                 return 0;
-             }
-             token = strtok(nullptr, ",");
-             if(token != nullptr)
-             {
-                 mission_item.z = atof(token); // 16 float
-             } else {
-                 return 0;
-             }
-            
-        }
-
-        _mav_put_float(buf, 16,mission_item.x);
-        _mav_put_float(buf, 20,mission_item.y);
-        _mav_put_float(buf, 24,mission_item.z);
-
-	mission_item.seq = 0;// 28 uint16
-        _mav_put_uint16_t(buf, 28, mission_item.seq);
-
-	mission_item.command = 16; // 30 uint16
-        _mav_put_uint16_t(buf, 30, mission_item.command);
-	mission_item.target_system = 1; //32 uint8
-        _mav_put_uint16_t(buf, 32, mission_item.target_system);
-	mission_item.target_component = 0; // 33 uint8
-        _mav_put_uint16_t(buf, 33, mission_item.target_component);
-	mission_item.frame = 3; // 34 uint8
-        _mav_put_uint16_t(buf, 34, mission_item.frame);
-	mission_item.current = 2; // 35 uint8
-        _mav_put_uint16_t(buf, 35, mission_item.current);
-	mission_item.autocontinue = 0; // 36 uint8
-        _mav_put_uint16_t(buf, 36, mission_item.autocontinue);
-
-        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 40);// 30 is about 
-
-        ret = 1;
-    } else if(strncmp(cmd, "param set circle_radius", 23) == 0) {
-        mavlink_param_set_t packet1;
-        unsigned char system_id;
-        unsigned char component_id;
-
-        system_id = 0;
-        component_id = 0;
-        memset(&packet1, 0, sizeof(packet1));
-        packet1.param_value = atof(&cmd[23]);
-        packet1.target_system = 0;
-        packet1.target_component = 0;
-        packet1.param_type = MAV_PARAM_TYPE_REAL32;
-        strcpy(packet1.param_id, "CIRCLE_RADIUS");
-        mavlink_msg_param_set_pack(system_id, 
-            component_id, msg , 
-            packet1.target_system , 
-            packet1.target_component , 
-            packet1.param_id , 
-            packet1.param_value , 
-            packet1.param_type );
-        ret = 1;
-
-    } else if(strncmp(cmd, "mqtt log_off", 12) == 0) {
-        mqtt_send_log_flag = MQTT_SEND_LOG_OFF;
-
-    } else if(strncmp(cmd, "mqtt log_on", 11) == 0) {
-        mqtt_send_log_flag = MQTT_SEND_LOG_ON;
-        mqtt_send_log_timer_val = atoi(&cmd[12]);
-        if (mqtt_send_log_timer_val == 0) 
-        {
-            mqtt_send_log_timer_val = 1;
-        }
-        mqtt_send_log_timer = mqtt_send_log_timer_val;
+      printf("Failed to start connect, return code %d\n", rc2);
     }
-
-
-
-
-    return ret;
+    return rc2;
 }
 
-int AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg) 
+void AP_Telemetry_MQTT::send_mqtt_log(const char *str)
 {
-    int ret;
-    char str_mqtt[200];
-    ret = 0;
-    if((stage_sub == MQTT_SUB_STAGE_SUBSCRIBED) && 
-       (sub_connect_stat == MQTT_SUB_STATUS_SUBSCRIBED) && 
-       (finished_sub == MQTT_SUB_NONFINISHED) &&
-       (disc_finished == 0))
+  char *topic;
+  if(client->send_log_flag == MQTT_SEND_LOG_ON)
+  {
+    if((client->connection_status == MQTT_CONNECTED) && (client != nullptr))
     {
-        ret = recv_data(str_mqtt);
-        if(ret != 0)
-        {
-            ret = mqtt_to_mavlink_message(str_mqtt, msg); 
-        }
+      sprintf(topic,"$ardupilot/copter/quad/log/%04d/location",
+              mavlink_system.sysid);
+       return send_message(str, topic);
     }
+  }
+}
+
+
+int AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
+{
+  MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
+  int rc;
+
+  pubmsg.payload = str;
+  pubmsg.payloadlen = strlen(str);
+  pubmsg.qos = QOS;
+  pubmsg.retained = 0;
+  deliveredtoken = 0;
+
+  if ((rc = MQTTAsync_sendMessage(*_mqtt_client, topic, &pubmsg, NULL)) != MQTTASYNC_SUCC)
+  {
+    printf("Failed to start sendMessage, return code %d\n", rc);
+  }
+  return rc;
+}
+
+
+int AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, int qos)
+{
+    if ((rc = MQTTAsync_subscribe(*_mqtt_client, topic, qos, NULL)) != MQTTASYNC_SUCC)
+    {
+      printf("Failed to start subscribe, return code %d\n", rc);
+    }
+    return rc;
+}
+
+
+int AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
+{
+  int ret, rc = 0;
+  char str_mqtt[MAX_PAYLOAD];
+  rc = pthread_mutex_lock(mqtt_mutex);
+  MQTTAsync_message * message;
+  if(rc == 0)
+  {
+    message = (MQTTAsync_message*)ListPopTail(_recv_msg_list);
+    rc = pthread_mutex_unlock(mqtt_mutex);
+    if(message != nullptr)
+    {
+      strncpy(str_mqtt, (char *)message->payload, message->payloadlen);
+      str_mqtt[message->payloadlen] = 0;
+      MQTTAsync_freeMessage(&message);
+    }
+    ret = mqtt_to_mavlink_message(str_mqtt, msg);
+  }
   return ret;
+}
 
+
+void AP_Telemetry_MQTT::onConnect(MQTTAsync_successData* response)
+{
+  char *topic = "$ardupilot/copter/quad/command/%04d/#";
+  subscribe_mqtt_topic(topic, 1);
+}
+
+const char* AP_Telemetry_MQTT::mqtt_msg_arrived(MQTTAsync_message* message)
+{
+  int rc;
+  if((rc = pthread_mutex_lock(mqtt_mutex)== 0)
+  {
+    ListAppend(_recv_msg_list, message, sizeof(MQTTAsync_message));
+    rc = pthread_mutex_unlock(mqtt_mutex);
+  } else {
+    MQTTAsync_freeMessage(&message);
+  }
 }
 
 
 // update - provide an opportunity to read/send telemetry
 void AP_Telemetry_MQTT::update()
 {
-    // exit immediately if no uart
-    if (_uart == nullptr || _frontend._ahrs == nullptr) {
-   //     return;
+  // exit immediately if no uart
+  if (_uart == nullptr || _frontend._ahrs == nullptr) {
+    //     return;
+  }
+
+  // send telemetry data once per second
+  uint32_t now = AP_HAL::millis();
+  if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
+    _last_send_ms = now;
+    Location loc;
+    if (_frontend._ahrs->get_position(loc)) {
+      char buf[100];
+      ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
+      (long)loc.lat,
+      (long)loc.lng,
+      (long)loc.alt);
     }
-
-    // send telemetry data once per second
-    uint32_t now = AP_HAL::millis();
-    if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
-        _last_send_ms = now;
-        Location loc;
-        if (_frontend._ahrs->get_position(loc)) {
-            char buf[100];
-            ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
-                    (long)loc.lat,
-                    (long)loc.lng,
-                    (long)loc.alt);
-            
-//printf("stage_pub=%dfinished_pub=%d\n", stage_pub,finished_pub);
-            switch (stage_pub)
-            {
-                case MQTT_PUB_STAGE_INITIAL://stage disconnect
-
-                    client = start_connect();
-                    if(client != NULL)
-                    {
-                        stage_pub = MQTT_PUB_STAGE_WAIT_CONNECT;// waiting for connection finish
-                    }
-                    break;
-                case MQTT_PUB_STAGE_WAIT_CONNECT:
-                    if (connected_pub == MQTT_PUB_CONNECTED)
-                    {
-                        stage_pub = MQTT_PUB_STAGE_CONNECTED;
-                    } else if(finished_pub == MQTT_PUB_FINISHED)
-                    {
-                        MQTTAsync_destroy(&client);
-                        stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
-                        connect_timer_pub = MQTT_PUB_RECONNECT_TIMER;
-                    }
-                    break;
-                case MQTT_PUB_STAGE_CONNECTED:
-                    if(finished_pub == MQTT_PUB_FINISHED)
-                    {
-                        MQTTAsync_destroy(&client);
-                        stage_pub = MQTT_PUB_STAGE_WAIT_RECONNECT;
-                        connect_timer_pub = MQTT_PUB_RECONNECT_TIMER;
-                    }
-                    break;
-                case MQTT_PUB_STAGE_WAIT_RECONNECT:
-                    if(connect_timer_pub > 0)
-                    {
-                        connect_timer_pub--;
-                    } else {
-                        stage_pub = MQTT_PUB_STAGE_INITIAL;
-                    }
-                    break;
-               
-            }
-printf("stage_sub=%d,finished_sub=%d\n", stage_sub,finished_sub);
-            switch (stage_sub)
-            {
-                case MQTT_SUB_STAGE_INITIAL:
-                    if (sub_connect_stat == MQTT_SUB_STATUS_INITIAL)
-                    {
-                        sprintf(topic_sub,"$ardupilot/copter/quad/command/%04d/#", mavlink_system.sysid);
-                        start_subscribe();
-                        stage_sub = MQTT_SUB_STAGE_WAIT_SUBSCRIBED;
-                        
-                    }
-                    break;
-                case MQTT_SUB_STAGE_WAIT_SUBSCRIBED:
-                    if(sub_connect_stat == MQTT_SUB_STATUS_SUBSCRIBED)
-                    {
-                        stage_sub = MQTT_SUB_STAGE_SUBSCRIBED;
-                    } else if(finished_sub == MQTT_SUB_FINISHED)
-                    {
-                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
-                        stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
-                    }
-                    break;
-                case MQTT_SUB_STAGE_SUBSCRIBED:
-                    if((disc_finished == 1) || (finished_sub == MQTT_SUB_FINISHED))
-                    {
-                        connect_timer_sub = MQTT_SUB_RESUBSCRIBE_TIMER;
-                        stage_sub = MQTT_SUB_STAGE_WAIT_RESUBSCRIBE;
-                    }
-                    break;
-                case MQTT_SUB_STAGE_WAIT_RESUBSCRIBE:
-                    if(connect_timer_sub > 0)
-                    {
-                        connect_timer_sub--;
-                    } else {
-                        sub_connect_stat = MQTT_SUB_STATUS_INITIAL;
-                        stage_sub = MQTT_SUB_STAGE_INITIAL;
-                    }
-                    break;
-                    
-            }
-
-        }
-    }
+  }
 }

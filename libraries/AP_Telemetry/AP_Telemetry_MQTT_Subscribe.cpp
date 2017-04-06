@@ -61,7 +61,7 @@ void connlost_sub(void *context, char *cause)
 	MQTTAsync client = (MQTTAsync)context;
 	MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
 
-	
+
 
 	int rc;
 
@@ -69,7 +69,7 @@ void connlost_sub(void *context, char *cause)
 	printf("     cause: %s\n", cause);
 
         if (context != nullptr)
-        { 
+        {
             printf("Reconnecting\n");
             conn_opts.keepAliveInterval = 20;
             conn_opts.cleansession = 1;
@@ -107,7 +107,7 @@ int msgarrvd_sub(void *context, char *topicName, int topicLen, MQTTAsync_message
         putchar(*payloadptr++);
     }
     putchar('\n');
-    
+
     rc = pthread_mutex_lock(mqtt_mutex);
 printf("pthread_mutex_lock rc = %d\n", rc);
     if(rc == 0)
@@ -189,17 +189,17 @@ int recv_data(char *str)
     int rc;
     MQTTAsync_message *message;
 
-    
+
     if(recv_msg_list->count != 0)
     {
         rc = pthread_mutex_lock(mqtt_mutex);
-printf("pthread_mutex_lock rc = %d\n", rc);
+        printf("pthread_mutex_lock rc = %d\n", rc);
         if(rc == 0)
         {
             message = (MQTTAsync_message*)ListPopTail(recv_msg_list);
             rc = pthread_mutex_unlock(mqtt_mutex);
             printf("pthread_mutex_unlock rc = %d\n", rc);
-            if(message != nullptr) 
+            if(message != nullptr)
             {
                 strncpy(str, (char *)message->payload, message->payloadlen);
                 str[message->payloadlen] = 0;
@@ -208,15 +208,15 @@ printf("pthread_mutex_lock rc = %d\n", rc);
                 ret = 1;
             } else {
                 strcpy(str, "");
-                ret = 0;   
+                ret = 0;
             }
         } else {
             strcpy(str, "");
-            ret = 0;   
+            ret = 0;
         }
     } else {
         strcpy(str, "");
-        ret = 0;        
+        ret = 0;
     }
     return ret;
 }
@@ -270,5 +270,3 @@ int start_subscribe(void)
 	}
          return 0;
 }
-
-
