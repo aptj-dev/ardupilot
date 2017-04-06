@@ -1,4 +1,5 @@
 #include "Copter.h"
+#include <time.h>
 
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
@@ -43,7 +44,26 @@ void Copter::userhook_SuperSlowLoop()
        Location loc;
         if (ahrs.get_position(loc)) {
             char buf[100];
-            ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
+            char timebuf[100];
+            time_t now_time;
+            struct tm *t_st;
+            time(&now_time);
+            t_st = localtime(&now_time);
+            ::sprintf(timebuf, "%04d%02d%02d%02d%02d%02d",
+                               t_st->tm_year + 1900,
+                               t_st->tm_mon + 1,
+                               t_st->tm_mday,
+                               t_st->tm_hour,
+                               t_st->tm_min,
+                               t_st->tm_sec);
+
+
+
+
+
+            ::sprintf(buf,"{id:\"%04d\",time:\"%s\",lat:%ld,lon:%ld,alt:%ld}\n",
+                    mavlink_system.sysid,
+                    timebuf,
                     (long)loc.lat,
                     (long)loc.lng,
                     (long)loc.alt);

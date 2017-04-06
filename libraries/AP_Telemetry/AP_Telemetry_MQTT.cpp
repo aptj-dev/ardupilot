@@ -121,6 +121,19 @@ int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
             0,0,MAV_CMD_NAV_TAKEOFF,0,
             0.0,0.0,hnbpa,0.0,0.0,0.0,takeoff_alt);
         ret = 1;
+    } else if (strncmp(cmd, "mode land", 9) == 0){
+        //mode guided
+        char buf[30];
+        memset(buf, 0, sizeof(buf));
+        memset(msg, 0, sizeof(mavlink_message_t));
+        msg->msgid = MAVLINK_MSG_ID_SET_MODE;
+        msg->len = 6;
+        _mav_put_uint32_t(buf, 0,9);
+        _mav_put_uint8_t(buf, 4,1);
+        _mav_put_uint8_t(buf, 5,1);
+        memcpy(_MAV_PAYLOAD_NON_CONST(msg), buf, 30);// 30 is about 
+        ret = 1;
+
     } else if (strncmp(cmd, "mode guided", 11) == 0){
         //mode guided
         char buf[30];
