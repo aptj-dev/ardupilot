@@ -17,9 +17,12 @@
 #include <AP_SerialManager/AP_SerialManager.h>
 
 
-extern int mqtt_to_mavlink_message(char *cmd, mavlink_message_t *msg)
+extern int mqtt_to_mavlink_message(const char *mqtt_cmd, mavlink_message_t *msg)
 {
   int ret;
+  char *cmd = '\0';
+
+  strcpy(cmd, mqtt_cmd);
   ret = 0;
   printf("received mqtt from Pc %s \n", cmd);
   if(strncmp(cmd, "arm", 3) == 0)

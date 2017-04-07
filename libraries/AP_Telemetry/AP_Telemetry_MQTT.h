@@ -43,7 +43,9 @@ public:
   int recv_mavlink_message(mavlink_message_t *msg) override;
   int send_log_flag;
   int connection_status;
-  //  int subscribe_mqtt_topic(const char* topic, int qos);
+  int subscribe_mqtt_topic(const char* topic, int qos);
+  const char* pop_mqtt_message();
+  void append_mqtt_message();
 
 private:
   List* recv_msg_list;
