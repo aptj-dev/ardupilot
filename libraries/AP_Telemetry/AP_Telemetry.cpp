@@ -46,7 +46,7 @@ void AP_Telemetry::send_text(const char *str)
 {
     for (uint8_t i=0; i<AP_TELEMETRY_MAX_INSTANCES; i++) {
         if (_drivers[i] != nullptr) {
-            _drivers[i]->send_text(str);
+            _drivers[i]->send_log(str);
         }
     }
 

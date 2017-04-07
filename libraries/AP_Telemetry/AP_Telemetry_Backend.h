@@ -31,7 +31,7 @@ public:
     virtual int recv_mavlink_message(mavlink_message_t *msg){return 0;}
 
     // send text
-    virtual void send_text(const char *str) {}
+    virtual void send_log(const char *str) {}
     virtual void send_text_fmt(const char *str, const char *fmt, ...) {}
 
 protected:

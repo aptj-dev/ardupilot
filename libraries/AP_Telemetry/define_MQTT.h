@@ -43,29 +43,25 @@ enum Mqtt_sub_status {
 };
 
 //mqtt status for connected_pub
-#define MQTT_PUB_DISCONNECTED 0
-#define MQTT_PUB_CONNECTED 1
+#define MQTT_DISCONNECTED 0
+#define MQTT_CONNECTED 1
 
 //mqtt status for finished_pub
 #define MQTT_PUB_NONFINISHED 0
 #define MQTT_PUB_FINISHED 1
 
-//mqtt status for connected_sub
-#define MQTT_SUB_DISCONNECTED 0
-#define MQTT_SUB_CONNECTED 1
-
 //mqtt status for finished_sub
 #define MQTT_SUB_NONFINISHED 0
 #define MQTT_SUB_FINISHED 1
 
-//mqtt initial waiting timer value (sec) for publish connection
-#define MQTT_PUB_INITIAL_TIMER 20
-
-//mqtt initial waiting timer value (sec) for subscribe
-#define MQTT_SUB_INITIAL_TIMER 20
-
 //mqtt reconnect waiting timer value (sec) for publish connection
-#define MQTT_PUB_RECONNECT_TIMER 10
+#define MQTT_RECONNECT_TIMER 10
 
 //mqtt resubscribe waiting timer value (sec) for subscribe
-#define MQTT_SUB_RESUBSCRIBE_TIMER 10
+#define MQTT_RESUBSCRIBE_TIMER 10
+
+#define ADDRESS "tcp://160.16.96.11:8883"
+
+#define QOS 1
+
+#define MAX_PAYLOAD 250
