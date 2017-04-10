@@ -35,25 +35,29 @@ extern "C" {
 class AP_Telemetry_MQTT : public AP_Telemetry_Backend
 {
 public:
-  AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
   static MQTTAsync* get_MQTTClient();
+  static AP_Telemetry_MQTT* get_telemetry_mqtt();
+  static AP_Telemetry_MQTT* init_telemetry_mqtt(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
   // update - provide an opportunity to read/send telemetry
   void update() override;
   void send_log(const char *str) override;
   int recv_mavlink_message(mavlink_message_t *msg) override;
+  int subscribe_mqtt_topic(const char* topic, int qos);
+  void pop_mqtt_message(char* str_mqtt);
+  void append_mqtt_message(MQTTAsync_message* message);
   int send_log_flag;
   int connection_status;
-  int subscribe_mqtt_topic(const char* topic, int qos);
-  const char* pop_mqtt_message();
-  void append_mqtt_message();
 
-private:
+private: 
   List* recv_msg_list;
+  AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+  static AP_Telemetry_MQTT* telemetry_mqtt;
+  static MQTTAsync* mqtt_client;
+  void init_mqtt();
   pthread_mutex_t* mqtt_mutex;
   pthread_mutex_t mqtt_mutex_store;
   int mqtt_send_log_timer_val;
   int mqtt_send_log_timer;
   int send_message(const char* str, const char* topic);
-  static MQTTAsync* mqtt_client;
   uint32_t _last_send_ms;
 };

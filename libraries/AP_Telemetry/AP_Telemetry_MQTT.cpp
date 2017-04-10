@@ -23,9 +23,8 @@
 
 extern int mqtt_to_mavlink_message(const char *cmd, mavlink_message_t *msg);
 
-MQTTAsync* AP_Telemetry_MQTT::mqtt_client;
-
-// Callbacks prototype
+MQTTAsync* AP_Telemetry_MQTT::mqtt_client = nullptr;
+AP_Telemetry_MQTT* AP_Telemetry_MQTT::telemetry_mqtt = nullptr;
 int mqtt_msg_arrived(void *context, char *topicname, int topicLen, MQTTAsync_message* message);
 void onConnect(void *context, MQTTAsync_successData* response);
 
@@ -34,8 +33,27 @@ MQTTAsync* AP_Telemetry_MQTT::get_MQTTClient(){
   return mqtt_client;
 }
 
+AP_Telemetry_MQTT* AP_Telemetry_MQTT::get_telemetry_mqtt()
+{
+  return telemetry_mqtt;
+}
+
+AP_Telemetry_MQTT* AP_Telemetry_MQTT::init_telemetry_mqtt(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart)
+{
+  if(telemetry_mqtt == nullptr)
+    {
+      telemetry_mqtt = new AP_Telemetry_MQTT(frontend, uart);
+      telemetry_mqtt->init_mqtt();
+    }
+  return telemetry_mqtt;
+}
+
+
 AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
   AP_Telemetry_Backend(frontend, uart)
+{}
+
+void AP_Telemetry_MQTT::init_mqtt()
 {
   int rc1;
   int rc2;
@@ -75,15 +93,15 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
 void AP_Telemetry_MQTT::send_log(const char *str)
 {
   char *topic = '\0';
-  if(send_log_flag == MQTT_SEND_LOG_ON)
+  //  if(send_log_flag == MQTT_SEND_LOG_ON)
+  //{
+  if((connection_status == MQTT_CONNECTED) && (mqtt_client != nullptr))
     {
-      if((connection_status == MQTT_CONNECTED) && (mqtt_client != nullptr))
-	{
-	  sprintf(topic, "$ardupilot/copter/quad/log/%04d/location",
-		  mavlink_system.sysid);
-	  send_message(str, topic);
-	}
+      sprintf(topic, "$ardupilot/copter/quad/log/%04d/location",
+	      mavlink_system.sysid);
+      send_message(str, topic);
     }
+  //}
 }
 
 
@@ -120,15 +138,14 @@ int AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, int qos)
 int AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
 {
   int ret = 0;
-  const char *str_mqtt = pop_mqtt_message();
+  char *str_mqtt = '\0';
+  AP_Telemetry_MQTT::pop_mqtt_message(str_mqtt);
   ret = mqtt_to_mavlink_message(str_mqtt, msg);
   return ret;
 }
 
-const char* AP_Telemetry_MQTT::pop_mqtt_message()
+void AP_Telemetry_MQTT::pop_mqtt_message(char *str_mqtt)
 {
-  int rc = 0;
-  char str_mqtt[MAX_PAYLOAD];
   MQTTAsync_message* message;
   if(pthread_mutex_lock(AP_Telemetry_MQTT::mqtt_mutex) == 0)
     {
@@ -141,27 +158,33 @@ const char* AP_Telemetry_MQTT::pop_mqtt_message()
   	}
     }
   MQTTAsync_freeMessage(&message);
-  return str_mqtt;
+}
+
+void AP_Telemetry_MQTT::append_mqtt_message(MQTTAsync_message* message)
+{
+  if(pthread_mutex_lock(mqtt_mutex) == 0)
+    {
+      ListAppend(recv_msg_list, message, sizeof(MQTTAsync_message));
+      pthread_mutex_unlock(mqtt_mutex);
+    } else {
+    MQTTAsync_freeMessage(&message);
+  }
 }
 
 void onConnect(void *context, MQTTAsync_successData* response)
 {
   char *topic = '\0';
   MQTTAsync* client = AP_Telemetry_MQTT::get_MQTTClient();
+  AP_Telemetry_MQTT* tele_mqtt = AP_Telemetry_MQTT::get_telemetry_mqtt();
+  tele_mqtt->connection_status = MQTT_CONNECTED;
   strcpy(topic,"$ardupilot/copter/quad/command/%04d/#");
   MQTTAsync_subscribe(client, topic, 1, NULL);
 }
 
 int mqtt_msg_arrived(void *context, char *topicname, int topicLen, MQTTAsync_message* message)
 {
-  // int rc;
-  // if((rc = pthread_mutex_lock(AP_Telemetry_MQTT::mqtt_mutex)) == 0)
-  //   {
-  //     ListAppend(AP_Telemetry_MQTT::recv_msg_list, message, sizeof(MQTTAsync_message));
-  //     rc = pthread_mutex_unlock(AP_Telemetry_MQTT::mqtt_mutex);
-  //   } else {
-  //     MQTTAsync_freeMessage(&message);
-  //   }   
+  AP_Telemetry_MQTT* tele_mqtt = AP_Telemetry_MQTT::get_telemetry_mqtt();
+  tele_mqtt->append_mqtt_message(message);
   return 0;
 }
 
