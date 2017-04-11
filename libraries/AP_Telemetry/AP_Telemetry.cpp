@@ -51,7 +51,6 @@ void AP_Telemetry::send_text(const char *str)
 
 }
 
-
 int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
 {
   int ret;
@@ -62,9 +61,7 @@ int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
     }
   }
   return ret;
-
 }
-
 
 // provide an opportunity to read/send telemetry
 void AP_Telemetry::update()

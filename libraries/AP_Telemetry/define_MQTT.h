@@ -60,8 +60,11 @@ enum Mqtt_sub_status {
 //mqtt resubscribe waiting timer value (sec) for subscribe
 #define MQTT_RESUBSCRIBE_TIMER 10
 
-#define ADDRESS "tcp://160.16.96.11:8883"
+//#define ADDRESS "tcp://160.16.96.11:8883"
+#define ADDRESS "tcp://192.168.11.12:1883"
 
 #define QOS 1
 
 #define MAX_PAYLOAD 250
+
+#define MAX_TOPIC 250

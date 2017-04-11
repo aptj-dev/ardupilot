@@ -43,6 +43,7 @@ public:
   void send_log(const char *str) override;
   int recv_mavlink_message(mavlink_message_t *msg) override;
   int subscribe_mqtt_topic(const char* topic, int qos);
+  int send_message(const char* str, const char* topic);
   void pop_mqtt_message(char* str_mqtt);
   void append_mqtt_message(MQTTAsync_message* message);
   int send_log_flag;
@@ -50,14 +51,13 @@ public:
 
 private: 
   List* recv_msg_list;
-  AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
   static AP_Telemetry_MQTT* telemetry_mqtt;
-  static MQTTAsync* mqtt_client;
+  static MQTTAsync mqtt_client;
   void init_mqtt();
+  AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
   pthread_mutex_t* mqtt_mutex;
   pthread_mutex_t mqtt_mutex_store;
   int mqtt_send_log_timer_val;
   int mqtt_send_log_timer;
-  int send_message(const char* str, const char* topic);
   uint32_t _last_send_ms;
 };
