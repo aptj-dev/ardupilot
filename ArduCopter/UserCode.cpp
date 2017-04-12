@@ -40,7 +40,7 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-  // put your 1Hz code here
+  //  put your 1Hz code here
   Location loc;
   if (ahrs.get_position(loc)) {
     char buf[100];
@@ -64,17 +64,15 @@ void Copter::userhook_SuperSlowLoop()
   	      (long)loc.lng,
   	      (long)loc.alt);
     telemetry.send_text(buf);
-  } // else {
-  //   telemetry.send_text("Not ahrs found.");
-  // }
-
+  } else {
+    telemetry.send_text("Not ahrs found.");
+  }
 
   mavlink_message_t msg;
-
   if (telemetry.recv_mavlink_message(&msg) != 0)
     {
-      //telemetry.send_text("Message received.");
-      gcs[0].handleMessage(&msg);
+      telemetry.send_text("Message received.");
+      //gcs[0].handleMessage(&msg);
     }
 }
 #endif

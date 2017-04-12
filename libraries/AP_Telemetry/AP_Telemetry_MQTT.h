@@ -18,19 +18,32 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+#include <string>
 #include "AP_Telemetry_Backend.h"
-
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
+#include "define_MQTT.h"
 #include "../../modules/Mqtt/MQTTAsync.h"
 #include "../../modules/Mqtt/LinkedList.h"
 
 #if defined( __cplusplus)
 }
 #endif
+
+// mqtt send_log on / off
+enum Mqtt_send_log {
+    MQTT_SEND_LOG_OFF = 0,
+    MQTT_SEND_LOG_ON  = 1,
+};
+
+//mqtt status for connection
+enum Mqtt_connection_status {
+  MQTT_DISCONNECTED = 0,
+  MQTT_CONNECTED = 1,
+};
 
 class AP_Telemetry_MQTT : public AP_Telemetry_Backend
 {
@@ -42,12 +55,12 @@ public:
   void update() override;
   void send_log(const char *str) override;
   int recv_mavlink_message(mavlink_message_t *msg) override;
-  int subscribe_mqtt_topic(const char* topic, int qos);
-  int send_message(const char* str, const char* topic);
+  void subscribe_mqtt_topic(const char* topic, int qos);
+  void send_message(const char* str, const char* topic);
   void pop_mqtt_message(char* str_mqtt);
   void append_mqtt_message(MQTTAsync_message* message);
-  int send_log_flag;
-  int connection_status;
+  enum Mqtt_connection_status connection_status = MQTT_DISCONNECTED;
+  enum Mqtt_send_log send_log_flag = MQTT_SEND_LOG_ON;
 
 private: 
   List* recv_msg_list;
@@ -55,6 +68,7 @@ private:
   static MQTTAsync mqtt_client;
   void init_mqtt();
   AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+  void MQTTHandle_error(int rc);
   pthread_mutex_t* mqtt_mutex;
   pthread_mutex_t mqtt_mutex_store;
   int mqtt_send_log_timer_val;
