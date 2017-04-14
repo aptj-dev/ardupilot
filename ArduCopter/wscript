@@ -43,7 +43,7 @@ def build(bld):
     bld.ap_program(
         program_name='arducopter',
         program_groups=['bin', 'copter'],
-        use=[vehicle + '_libs', vehicle + '_mods'],
+        use=[vehicle + '_libs'],
         defines=['FRAME_CONFIG=MULTICOPTER_FRAME','USERHOOK_SUPERSLOWLOOP=1'],
         )
 
