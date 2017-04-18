@@ -16,6 +16,7 @@
 #include "AP_Telemetry_MQTT.h"
 #include "define_MQTT.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <pthread.h>
 #include <time.h>
@@ -25,7 +26,7 @@ extern const AP_HAL::HAL& hal;
 
 extern int mqtt_to_mavlink_message(const char* cmd, mavlink_message_t *msg);
 
-MQTTAsync AP_Telemetry_MQTT::mqtt_client = nullptr;
+MQTTAsync AP_Telemetry_MQTT::mqtt_client;
 AP_Telemetry_MQTT* AP_Telemetry_MQTT::telemetry_mqtt = nullptr;
 int mqtt_msg_arrived(void *context, char *topicname, int topicLen, MQTTAsync_message* message);
 void onConnect(void *context, MQTTAsync_successData* response);
@@ -73,20 +74,25 @@ void onConnectFailure(void* context, MQTTAsync_failureData* response);
      MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
 
      conn_opts.keepAliveInterval = 20;
-     conn_opts.cleansession = 1;
-     //conn_opts.username = "aptj";
-     //conn_opts.password ="aptj-mqtt";
+     conn_opts.cleansession = 1;     
+     conn_opts.username = getenv("MQTT_USER");
+     conn_opts.password = getenv("MQTT_PASSWORD");
 
      conn_opts.onSuccess = onConnect;
      conn_opts.onFailure = onConnectFailure;
      conn_opts.context = mqtt_client;
 
-     srand((unsigned)time(NULL));
-     char clientid[4];
-     sprintf(clientid, "%d", rand() % 1000);
+     char clientid[9] = "no_id";
+     srand((unsigned int)time(0));
+     sprintf(clientid, "client_%d", rand()%100);
 
-     MQTTAsync_create(&mqtt_client, ADDRESS, clientid, MQTTCLIENT_PERSISTENCE_NONE, NULL);
-     MQTTAsync_setCallbacks(mqtt_client, NULL, NULL, mqtt_msg_arrived, NULL);
+     if((rc = MQTTAsync_create(&mqtt_client, getenv("MQTT_SERVER"), clientid, MQTTCLIENT_PERSISTENCE_NONE, NULL)) != 0)
+       {
+	 printf("Failed to create Client, return code %d\n", rc);
+	 MQTTHandle_error(rc);
+       }
+
+     MQTTAsync_setCallbacks(mqtt_client, NULL, NULL, mqtt_msg_arrived, NULL);     
      if ((rc = MQTTAsync_connect(mqtt_client, &conn_opts)) != MQTTASYNC_SUCCESS)
        {
 	 printf("Failed to start connect, return code %d\n", rc);
@@ -211,20 +217,19 @@ int mqtt_msg_arrived(void *context, char *topicName, int topicLen, MQTTAsync_mes
 void AP_Telemetry_MQTT::update()
 {
   // exit immediately if no uart
-  if (_uart == nullptr || _frontend._ahrs == nullptr) {
-    //     return;
-  }
-  // send telemetry data once per second
-  uint32_t now = AP_HAL::millis();
-  if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
-    _last_send_ms = now;
-    Location loc;
-    if (_frontend._ahrs->get_position(loc)) {
-      char buf[100];
-      ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
-		(long)loc.lat,
-		(long)loc.lng,
+  if (_uart != nullptr && _frontend._ahrs != nullptr) {
+    // send telemetry data once per second
+    uint32_t now = AP_HAL::millis();
+    if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
+      _last_send_ms = now;
+      Location loc;
+      if (_frontend._ahrs->get_position(loc)) {
+	char buf[100];
+	::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
+		  (long)loc.lat,
+		  (long)loc.lng,
 		(long)loc.alt);
+      }
     }
   }
 }

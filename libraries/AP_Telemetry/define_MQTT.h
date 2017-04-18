@@ -13,11 +13,11 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+
 //mqtt reconnect waiting timer value (sec) for publish connection
 #define MQTT_RECONNECT_TIMER 10
-
-//#define ADDRESS "tcp://160.16.96.11:8883"
-#define ADDRESS "tcp://192.168.11.12:1883"
 
 #define QOS 1
 
