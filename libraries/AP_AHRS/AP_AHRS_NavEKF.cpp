@@ -20,6 +20,7 @@
  */
 #include <AP_HAL/AP_HAL.h>
 #include "AP_AHRS.h"
+#include "AP_AHRS_View.h"
 #include <AP_Vehicle/AP_Vehicle.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_Module/AP_Module.h>
@@ -78,13 +79,13 @@ void AP_AHRS_NavEKF::reset_gyro_drift(void)
     EKF3.resetGyroBias();
 }
 
-void AP_AHRS_NavEKF::update(void)
+void AP_AHRS_NavEKF::update(bool skip_ins_update)
 {
     // EKF1 is no longer supported - handle case where it is selected
     if (_ekf_type == 1) {
         _ekf_type.set(2);
     }
-    update_DCM();
+    update_DCM(skip_ins_update);
     update_EKF2();
     update_EKF3();
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -99,9 +100,14 @@ void AP_AHRS_NavEKF::update(void)
         const Vector3f &exported_gyro_bias = get_gyro_drift();
         hal.opticalflow->push_gyro_bias(exported_gyro_bias.x, exported_gyro_bias.y);
     }
+
+    if (_view != nullptr) {
+        // update optional alternative attitude view
+        _view->update(skip_ins_update);
+    }
 }
 
-void AP_AHRS_NavEKF::update_DCM(void)
+void AP_AHRS_NavEKF::update_DCM(bool skip_ins_update)
 {
     // we need to restore the old DCM attitude values as these are
     // used internally in DCM to calculate error values for gyro drift
@@ -111,7 +117,7 @@ void AP_AHRS_NavEKF::update_DCM(void)
     yaw = _dcm_attitude.z;
     update_cd_values();
 
-    AP_AHRS_DCM::update();
+    AP_AHRS_DCM::update(skip_ins_update);
 
     // keep DCM attitude available for get_secondary_attitude()
     _dcm_attitude(roll, pitch, yaw);
@@ -263,7 +269,7 @@ void AP_AHRS_NavEKF::update_SITL(void)
         pitch = radians(fdm.pitchDeg);
         yaw   = radians(fdm.yawDeg);
 
-        _dcm_matrix.from_euler(roll, pitch, yaw);
+        fdm.quaternion.rotation_matrix(_dcm_matrix);
 
         update_cd_values();
         update_trig();
@@ -455,6 +461,27 @@ bool AP_AHRS_NavEKF::get_secondary_attitude(Vector3f &eulers)
     }
 }
 
+
+// return secondary attitude solution if available, as quaternion
+bool AP_AHRS_NavEKF::get_secondary_quaternion(Quaternion &quat)
+{
+    switch (active_EKF_type()) {
+    case EKF_TYPE_NONE:
+        // EKF is secondary
+        EKF2.getQuaternion(-1, quat);
+        return _ekf2_started;
+
+    case EKF_TYPE2:
+
+    case EKF_TYPE3:
+
+    default:
+        // DCM is secondary
+        quat.from_rotation_matrix(AP_AHRS_DCM::get_rotation_body_to_ned());
+        return true;
+    }
+}
+
 // return secondary position solution if available
 bool AP_AHRS_NavEKF::get_secondary_position(struct Location &loc)
 {
@@ -636,9 +663,9 @@ bool AP_AHRS_NavEKF::get_hagl(float &height) const
     }
 }
 
-// return a relative ground position in meters/second, North/East/Down
-// order. Must only be called if have_inertial_nav() is true
-bool AP_AHRS_NavEKF::get_relative_position_NED(Vector3f &vec) const
+// return a relative ground position to the origin in meters
+// North/East/Down order.
+bool AP_AHRS_NavEKF::get_relative_position_NED_origin(Vector3f &vec) const
 {
     switch (active_EKF_type()) {
     case EKF_TYPE_NONE:
@@ -685,9 +712,28 @@ bool AP_AHRS_NavEKF::get_relative_position_NED(Vector3f &vec) const
     }
 }
 
-// write a relative ground position estimate in meters, North/East order
+// return a relative ground position to the home in meters
+// North/East/Down order.
+bool AP_AHRS_NavEKF::get_relative_position_NED_home(Vector3f &vec) const
+{
+    Location originLLH;
+    Vector3f originNED;
+    if (!get_relative_position_NED_origin(originNED) ||
+        !get_origin(originLLH)) {
+        return false;
+    }
+
+    Vector3f offset = location_3d_diff_NED(originLLH, _home);
+
+    vec.x = originNED.x + offset.x;
+    vec.y = originNED.y + offset.y;
+    vec.z = originNED.z - offset.z;
+    return true;
+}
+
+// write a relative ground position estimate to the origin in meters, North/East order
 // return true if estimate is valid
-bool AP_AHRS_NavEKF::get_relative_position_NE(Vector2f &posNE) const
+bool AP_AHRS_NavEKF::get_relative_position_NE_origin(Vector2f &posNE) const
 {
     switch (active_EKF_type()) {
     case EKF_TYPE_NONE:
@@ -715,9 +761,30 @@ bool AP_AHRS_NavEKF::get_relative_position_NE(Vector2f &posNE) const
     }
 }
 
-// write a relative ground position in meters, Down
+// return a relative ground position to the home in meters
+// North/East order.
+bool AP_AHRS_NavEKF::get_relative_position_NE_home(Vector2f &posNE) const
+{
+    Location originLLH;
+    Vector2f originNE;
+    if (!get_relative_position_NE_origin(originNE) ||
+        !get_origin(originLLH)) {
+        return false;
+    }
+
+    Vector2f offset = location_diff(originLLH, _home);
+
+    posNE.x = originNE.x + offset.x;
+    posNE.y = originNE.y + offset.y;
+    return true;
+}
+
+// write a relative ground position estimate to the origin in meters, North/East order
+
+
+// write a relative ground position to the origin in meters, Down
 // return true if the estimate is valid
-bool AP_AHRS_NavEKF::get_relative_position_D(float &posD) const
+bool AP_AHRS_NavEKF::get_relative_position_D_origin(float &posD) const
 {
     switch (active_EKF_type()) {
     case EKF_TYPE_NONE:
@@ -744,6 +811,21 @@ bool AP_AHRS_NavEKF::get_relative_position_D(float &posD) const
     }
 }
 
+// write a relative ground position to home in meters, Down
+// will use the barometer if the EKF isn't available
+void AP_AHRS_NavEKF::get_relative_position_D_home(float &posD) const
+{
+    Location originLLH;
+    float originD;
+    if (!get_relative_position_D_origin(originD) ||
+        !get_origin(originLLH)) {
+        posD = -_baro.get_altitude();
+        return;
+    }
+
+    posD = originD - ((originLLH.alt - _home.alt) * 0.01f);
+    return;
+}
 /*
   canonicalise _ekf_type, forcing it to be 0, 2 or 3
   type 1 has been deprecated
@@ -1059,20 +1141,26 @@ bool AP_AHRS_NavEKF::getMagOffsets(uint8_t mag_idx, Vector3f &magOffsets)
 // Retrieves the NED delta velocity corrected
 void AP_AHRS_NavEKF::getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const
 {
-    if (ekf_type() == 2 || ekf_type() == 3) {
-        uint8_t imu_idx = 0;
+    EKF_TYPE type = active_EKF_type();
+    if (type == EKF_TYPE2 || type == EKF_TYPE3) {
+        int8_t imu_idx = 0;
         Vector3f accel_bias;
-        if (ekf_type() == 2) {
+        if (type == EKF_TYPE2) {
             accel_bias.zero();
             imu_idx = EKF2.getPrimaryCoreIMUIndex();
             EKF2.getAccelZBias(-1,accel_bias.z);
-        } else if (ekf_type() == 3) {
+        } else if (type == EKF_TYPE3) {
             imu_idx = EKF3.getPrimaryCoreIMUIndex();
             EKF3.getAccelBias(-1,accel_bias);
         }
+        if (imu_idx == -1) {
+            // should never happen, call parent implementation in this scenario
+            AP_AHRS::getCorrectedDeltaVelocityNED(ret, dt);
+            return;
+        }
         ret.zero();
-        _ins.get_delta_velocity(imu_idx, ret);
-        dt = _ins.get_delta_velocity_dt(imu_idx);
+        _ins.get_delta_velocity((uint8_t)imu_idx, ret);
+        dt = _ins.get_delta_velocity_dt((uint8_t)imu_idx);
         ret -= accel_bias*dt;
         ret = _dcm_matrix * get_rotation_autopilot_body_to_vehicle_body() * ret;
         ret.z += GRAVITY_MSS*dt;
@@ -1410,7 +1498,7 @@ bool AP_AHRS_NavEKF::have_ekf_logging(void) const
     return false;
 }
 
-// get earth-frame accel vector for primary IMU
+// get the index of the current primary IMU
 uint8_t AP_AHRS_NavEKF::get_primary_IMU_index() const
 {
     int8_t imu = -1;

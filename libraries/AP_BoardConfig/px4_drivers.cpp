@@ -16,7 +16,6 @@
  *   AP_BoardConfig - px4 driver loading and setup
  */
 
-
 #include <AP_HAL/AP_HAL.h>
 #include "AP_BoardConfig.h"
 
@@ -30,6 +29,11 @@
 #include <drivers/drv_sbus.h>
 #include <nuttx/arch.h>
 #include <spawn.h>
+
+#if HAL_WITH_UAVCAN
+#include <AP_HAL_PX4/CAN.h>
+#include <AP_UAVCAN/AP_UAVCAN.h>
+#endif
 
 extern const AP_HAL::HAL& hal;
 
@@ -47,18 +51,6 @@ extern "C" {
     int adc_main(int, char **);
     int tone_alarm_main(int, char **);
 };
-
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4 && !defined(CONFIG_ARCH_BOARD_PX4FMU_V1)
-/*
-  this is needed for the code to wait for CAN startup
- */
-#define _UAVCAN_IOCBASE             (0x4000)                        // IOCTL base for module UAVCAN
-#define _UAVCAN_IOC(_n)             (_IOC(_UAVCAN_IOCBASE, _n))
-
-#define UAVCAN_IOCG_NODEID_INPROGRESS  _UAVCAN_IOC(1)               // query if node identification is in progress
-#endif
-
 
 /*
   setup PWM pins
@@ -89,7 +81,7 @@ void AP_BoardConfig::px4_setup_pwm()
         }
     }
     if (i == ARRAY_SIZE(mode_table)) {
-        hal.console->printf("RCOutput: invalid BRD_PWM_COUNT %u\n", mode_parm); 
+        hal.console->printf("RCOutput: invalid BRD_PWM_COUNT %u\n", mode_parm);
     } else {
         int fd = open("/dev/px4fmu", 0);
         if (fd == -1) {
@@ -97,7 +89,7 @@ void AP_BoardConfig::px4_setup_pwm()
         }
         if (ioctl(fd, PWM_SERVO_SET_MODE, mode_table[i].mode_value) != 0) {
             hal.console->printf("RCOutput: unable to setup AUX PWM with BRD_PWM_COUNT %u\n", mode_parm);
-        }   
+        }
         close(fd);
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
         if (mode_table[i].num_gpios < 2) {
@@ -108,7 +100,6 @@ void AP_BoardConfig::px4_setup_pwm()
 #endif
     }
 }
-
 
 /*
   setup flow control on UARTs
@@ -171,7 +162,6 @@ void AP_BoardConfig::px4_setup_safety()
     }
 }
 
-
 /*
   setup SBUS
  */
@@ -204,46 +194,47 @@ void AP_BoardConfig::px4_setup_sbus(void)
 #endif
 }
 
-
 /*
   setup CANBUS drivers
  */
 void AP_BoardConfig::px4_setup_canbus(void)
 {
 #if HAL_WITH_UAVCAN
-    if (px4.can_enable >= 1) {
-        // give time for other drivers to fully start before we start
-        // canbus. This prevents a race where a canbus mag comes up
-        // before the hmc5883
-        hal.scheduler->delay(500);
-        if (px4_start_driver(uavcan_main, "uavcan", "start")) {
-            hal.console->printf("UAVCAN: started\n");            
-            // give some time for CAN bus initialisation
-            hal.scheduler->delay(2000);
-        } else {
-            hal.console->printf("UAVCAN: failed to start\n");
+    if (_var_info_can._can_enable >= 1) {
+        if(hal.can_mgr == nullptr)
+        {
+            const_cast <AP_HAL::HAL&> (hal).can_mgr = new PX4::PX4CANManager;
         }
-        // give time for canbus drivers to register themselves
-        hal.scheduler->delay(2000);
-    }
-    if (px4.can_enable >= 2) {
-        if (px4_start_driver(uavcan_main, "uavcan", "start fw")) {
-            uint32_t start_wait_ms = AP_HAL::millis();
-            int fd = open("/dev/uavcan/esc", 0); // design flaw of uavcan driver, this should be /dev/uavcan/node one day
-            if (fd == -1) {
-                AP_HAL::panic("Configuration invalid - unable to open /dev/uavcan/esc");
-            }
 
-            // delay startup, UAVCAN still discovering nodes
-            while (ioctl(fd, UAVCAN_IOCG_NODEID_INPROGRESS,0) == OK &&
-                   AP_HAL::millis() - start_wait_ms < 7000) {
-                hal.scheduler->delay(500);
+        if(hal.can_mgr != nullptr)
+        {
+            if(_var_info_can._uavcan_enable > 0)
+            {
+                _var_info_can._uavcan = new AP_UAVCAN;
+                if(_var_info_can._uavcan != nullptr)
+                {
+                    AP_Param::load_object_from_eeprom(_var_info_can._uavcan, AP_UAVCAN::var_info);
+
+                    hal.can_mgr->set_UAVCAN(_var_info_can._uavcan);
+
+                    bool initret = hal.can_mgr->begin(_var_info_can._can_bitrate, _var_info_can._can_enable);
+                    if (!initret) {
+                        hal.console->printf("Failed to initialize can_mgr\n\r");
+                    } else {
+                        hal.console->printf("can_mgr initialized well\n\r");
+
+                        // start UAVCAN working thread
+                        hal.scheduler->create_uavcan_thread();
+                    }
+                } else
+                {
+                    _var_info_can._uavcan_enable.set(0);
+                    hal.console->printf("AP_UAVCAN failed to allocate\n\r");
+                }
             }
-            hal.console->printf("UAVCAN: node discovery complete\n");
-            close(fd);
         }
     }
-#endif // CONFIG_HAL_BOARD && !CONFIG_ARCH_BOARD_PX4FMU_V1
+#endif
 }
 
 extern "C" int waitpid(pid_t, int *, int);
@@ -269,7 +260,7 @@ bool AP_BoardConfig::px4_start_driver(main_fn_t main_function, const char *name,
 
     printf("Starting driver %s %s\n", name, arguments);
     pid_t pid;
-    
+
     if (task_spawn(&pid, name, main_function, nullptr, nullptr,
                    args, nullptr) != 0) {
         free(s);
@@ -297,7 +288,7 @@ void AP_BoardConfig::px4_setup_drivers(void)
       sensor brownout on boot
      */
     if (px4_start_driver(fmu_main, "fmu", "sensor_reset 20")) {
-        printf("FMUv4 sensor reset complete\n");        
+        printf("FMUv4 sensor reset complete\n");
     }
 #endif
 
@@ -305,7 +296,7 @@ void AP_BoardConfig::px4_setup_drivers(void)
         printf("Old drivers no longer supported\n");
         px4.board_type = PX4_BOARD_AUTO;
     }
-    
+
     // run board auto-detection
     px4_autodetect();
 
@@ -313,7 +304,7 @@ void AP_BoardConfig::px4_setup_drivers(void)
         px4.board_type == PX4_BOARD_PIXHAWK2) {
         _imu_target_temperature.set_default(60);
     }
-    
+
     px4_configured_board = (enum px4_board_type)px4.board_type.get();
 
     switch (px4_configured_board) {
@@ -322,7 +313,9 @@ void AP_BoardConfig::px4_setup_drivers(void)
     case PX4_BOARD_PIXHAWK2:
     case PX4_BOARD_PIXRACER:
     case PX4_BOARD_PHMINI:
+    case PX4_BOARD_AUAV21:
     case PX4_BOARD_PH2SLIM:
+    case PX4_BOARD_AEROFC:
         break;
     default:
         px4_sensor_error("Unknown board type");
@@ -409,12 +402,16 @@ void AP_BoardConfig::px4_setup_peripherals(void)
         px4_sensor_error("no ADC found");
     }
 
-#ifndef CONFIG_ARCH_BOARD_PX4FMU_V4
-    px4_setup_px4io();
+#if HAL_PX4_HAVE_PX4IO
+    if (px4.io_enable.get() != 0) {
+        px4_setup_px4io();
+    }
 #endif
 
-#ifdef CONFIG_ARCH_BOARD_PX4FMU_V1
+#if defined(CONFIG_ARCH_BOARD_PX4FMU_V1)
     const char *fmu_mode = "mode_serial";
+#elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
+    const char *fmu_mode = "mode_rcin";
 #else
     const char *fmu_mode = "mode_pwm4";
 #endif
@@ -453,6 +450,7 @@ bool AP_BoardConfig::spi_check_register(const char *devname, uint8_t regnum, uin
 #define MPU_WHOAMI_MPU60X0  0x68
 #define MPU_WHOAMI_MPU9250  0x71
 #define MPU_WHOAMI_ICM20608 0xaf
+#define MPU_WHOAMI_ICM20602 0x12
 
 #define LSMREG_WHOAMI 0x0f
 #define LSM_WHOAMI_LSM303D 0x49
@@ -466,7 +464,7 @@ void AP_BoardConfig::px4_autodetect(void)
         // user has chosen a board type
         return;
     }
-    
+
 #if defined(CONFIG_ARCH_BOARD_PX4FMU_V1)
     // only one choice
     px4.board_type.set(PX4_BOARD_PX4V1);
@@ -475,12 +473,14 @@ void AP_BoardConfig::px4_autodetect(void)
 #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V2)
     if ((spi_check_register(HAL_INS_MPU60x0_EXT_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
          spi_check_register(HAL_INS_MPU9250_EXT_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU9250) ||
-         spi_check_register(HAL_INS_ICM20608_EXT_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20608)) &&
+         spi_check_register(HAL_INS_ICM20608_EXT_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20608) ||
+         spi_check_register(HAL_INS_ICM20608_EXT_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20602)) &&
         spi_check_register(HAL_INS_LSM9DS0_EXT_A_NAME, LSMREG_WHOAMI, LSM_WHOAMI_LSM303D)) {
         // Pixhawk2 has LSM303D and MPUxxxx on external bus
         px4.board_type.set(PX4_BOARD_PIXHAWK2);
         hal.console->printf("Detected PIXHAWK2\n");
-    } else if (spi_check_register(HAL_INS_ICM20608_AM_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20608) &&
+    } else if ((spi_check_register(HAL_INS_ICM20608_AM_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20608) ||
+                spi_check_register(HAL_INS_ICM20608_AM_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20602)) &&
                spi_check_register(HAL_INS_MPU9250_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU9250)) {
         // PHMINI has an ICM20608 and MPU9250 on sensor bus
         px4.board_type.set(PX4_BOARD_PHMINI);
@@ -488,7 +488,9 @@ void AP_BoardConfig::px4_autodetect(void)
     } else if (spi_check_register(HAL_INS_LSM9DS0_A_NAME, LSMREG_WHOAMI, LSM_WHOAMI_LSM303D) &&
                (spi_check_register(HAL_INS_MPU60x0_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
                 spi_check_register(HAL_INS_ICM20608_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20608) ||
+                spi_check_register(HAL_INS_ICM20608_NAME, MPUREG_WHOAMI, MPU_WHOAMI_ICM20602) ||
                 spi_check_register(HAL_INS_MPU9250_NAME, MPUREG_WHOAMI, MPU_WHOAMI_MPU9250))) {
+
         // classic or upgraded Pixhawk1
         px4.board_type.set(PX4_BOARD_PIXHAWK);
         hal.console->printf("Detected Pixhawk\n");
@@ -497,10 +499,13 @@ void AP_BoardConfig::px4_autodetect(void)
     }
 #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V4)
     // only one choice
-    px4.board_type.set_and_notify(PX4_BOARD_PIXRACER);    
+    px4.board_type.set_and_notify(PX4_BOARD_PIXRACER);
     hal.console->printf("Detected Pixracer\n");
+#elif defined(CONFIG_ARCH_BOARD_AEROFC_V1)
+    px4.board_type.set_and_notify(PX4_BOARD_AEROFC);
+    hal.console->printf("Detected Aero FC\n");
 #endif
-    
+
 }
 
 /*

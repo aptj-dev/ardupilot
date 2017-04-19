@@ -10,7 +10,7 @@ const AP_Param::GroupInfo AC_Avoid::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("ENABLE", 1,  AC_Avoid, _enabled, AC_AVOID_ALL),
 
-    // @Param: ANGLE MAX
+    // @Param: ANGLE_MAX
     // @DisplayName: Avoidance max lean angle in non-GPS flight modes
     // @Description: Max lean angle used to avoid obstacles while in non-GPS modes
     // @Range: 0 4500
@@ -87,10 +87,10 @@ void AC_Avoid::adjust_velocity_z(float kP, float accel_cmss, float& climb_rate_c
     float alt_diff_cm = 0.0f;   // distance from altitude limit to vehicle in cm (positive means vehicle is below limit)
 
     // calculate distance below fence
-    if ((_enabled & AC_AVOID_STOP_AT_FENCE) > 0) {
+    if ((_enabled & AC_AVOID_STOP_AT_FENCE) > 0 && (_fence.get_enabled_fences() & AC_FENCE_TYPE_ALT_MAX) > 0) {
         // calculate distance from vehicle to safe altitude
         float veh_alt = get_alt_above_home();
-        alt_diff_cm = _fence.get_safe_alt() * 100.0f - veh_alt;
+        alt_diff_cm = _fence.get_safe_alt_max() * 100.0f - veh_alt;
         limit_alt = true;
     }
 
@@ -107,7 +107,7 @@ void AC_Avoid::adjust_velocity_z(float kP, float accel_cmss, float& climb_rate_c
     // get distance from proximity sensor (in meters, convert to cm)
     float proximity_alt_diff_m;
     if (_proximity.get_upward_distance(proximity_alt_diff_m)) {
-        float proximity_alt_diff_cm = proximity_alt_diff_m * 100.0f;
+        float proximity_alt_diff_cm = (proximity_alt_diff_m - AC_AVOID_UPWARD_MARGIN_M) * 100.0f;
         if (!limit_alt || proximity_alt_diff_cm < alt_diff_cm) {
             alt_diff_cm = proximity_alt_diff_cm;
         }

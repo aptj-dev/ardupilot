@@ -1,5 +1,8 @@
 /*
-  24 state EKF based on https://github.com/priseborough/InertialNav
+  24 state EKF based on the derivation in https://github.com/priseborough/
+  InertialNav/blob/master/derivations/RotationVectorAttitudeParameterisation/
+  GenerateNavFilterEquations.m
+
   Converted from Matlab to C++ by Paul Riseborough
 
   EKF Tuning parameters refactored by Tom Cauchois
@@ -176,7 +179,7 @@ public:
     void getRotationBodyToNED(Matrix3f &mat) const;
 
     // return the quaternions defining the rotation from NED to XYZ (body) axes
-    void getQuaternion(Quaternion &quat) const;
+    void getQuaternion(int8_t instance, Quaternion &quat) const;
 
     // return the innovations for the specified instance
     // An out of range instance (eg -1) returns data for the the primary instance
@@ -299,6 +302,9 @@ public:
     // report any reason for why the backend is refusing to initialise
     const char *prearm_failure_reason(void) const;
 
+    // set and save the _baroAltNoise parameter
+    void set_baro_alt_noise(float noise) { _baroAltNoise.set_and_save(noise); };
+
     // allow the enable flag to be set by Replay
     void set_enable(bool enable) { _enable.set(enable); }
 
@@ -361,6 +367,7 @@ private:
     AP_Int16 _rngBcnInnovGate;      // Percentage number of standard deviations applied to range beacon innovation consistency check
     AP_Int8  _rngBcnDelay_ms;       // effective average delay of range beacon measurements rel to IMU (msec)
     AP_Float _useRngSwSpd;          // Maximum horizontal ground speed to use range finder as the primary height source (m/s)
+    AP_Int8 _magMask;               // Bitmask forcng specific EKF core instances to use simple heading magnetometer fusion.
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration

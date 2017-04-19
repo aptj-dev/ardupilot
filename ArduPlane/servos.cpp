@@ -48,6 +48,8 @@ void Plane::throttle_slew_limit(void)
    *       4 - We are not performing a takeoff in Auto mode or takeoff speed/accel not yet reached
    *       OR
    *       5 - Home location is not set
+   *       OR
+   *       6- Landing does not want to allow throttle
 */
 bool Plane::suppress_throttle(void)
 {
@@ -58,6 +60,10 @@ bool Plane::suppress_throttle(void)
         return true;
     }
 #endif
+
+    if (landing.is_throttle_suppressed()) {
+        return true;
+    }
 
     if (!throttle_suppressed) {
         // we've previously met a condition for unsupressing the throttle
@@ -101,7 +107,7 @@ bool Plane::suppress_throttle(void)
         return true;
     }
     
-    if (relative_altitude_abs_cm() >= 1000) {
+    if (fabsf(relative_altitude) >= 10.0f) {
         // we're more than 10m from the home altitude
         throttle_suppressed = false;
         return false;
@@ -402,10 +408,17 @@ void Plane::set_servos_controlled(void)
         set_servos_old_elevons();
     } else {
         // both types of secondary aileron are slaved to the roll servo out
-        SRV_Channels::set_output_scaled(SRV_Channel::k_aileron_with_input, SRV_Channels::get_output_scaled(SRV_Channel::k_aileron));
-        
+        SRV_Channels::set_output_scaled(SRV_Channel::k_aileron_with_input,
+                                        SRV_Channels::get_output_scaled(SRV_Channel::k_aileron));
+
         // both types of secondary elevator are slaved to the pitch servo out
-        SRV_Channels::set_output_scaled(SRV_Channel::k_elevator_with_input, SRV_Channels::get_output_scaled(SRV_Channel::k_elevator));
+        SRV_Channels::set_output_scaled(SRV_Channel::k_elevator_with_input,
+                                            SRV_Channels::get_output_scaled(SRV_Channel::k_elevator));
+    }
+
+    if (flight_stage == AP_Vehicle::FixedWing::FLIGHT_LAND) {
+        // allow landing to override servos if it would like to
+        landing.override_servos();
     }
 
     // convert 0 to 100% (or -100 to +100) into PWM
@@ -464,6 +477,14 @@ void Plane::set_servos_controlled(void)
         // ask quadplane code for forward throttle
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, quadplane.forward_throttle_pct());
     }
+
+    // suppress throttle when soaring is active
+    if ((control_mode == FLY_BY_WIRE_B || control_mode == CRUISE ||
+        control_mode == AUTO || control_mode == LOITER) &&
+        g2.soaring_controller.is_active() &&
+        g2.soaring_controller.get_throttle_suppressed()) {
+        SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 0);
+    }
 }
 
 /*
@@ -513,7 +534,7 @@ void Plane::set_servos_flaps(void)
                 }
                 break;
             case AP_Vehicle::FixedWing::FLIGHT_NORMAL:
-                if (auto_flap_percent != 0 && in_preLaunch_flight_stage()) {
+                if (g.takeoff_flap_percent != 0 && in_preLaunch_flight_stage()) {
                     // TODO: move this to a new FLIGHT_PRE_TAKEOFF stage
                     auto_flap_percent = g.takeoff_flap_percent;
                 }
@@ -593,6 +614,29 @@ void Plane::servo_output_mixers(void)
                                                 (int16_t(ch4)-1500) * (int16_t)(SERVO_MAX/300) / (int16_t)2);
         }
     }
+}
+
+/*
+  support for twin-engine planes
+ */
+void Plane::servos_twin_engine_mix(void)
+{
+    float throttle = SRV_Channels::get_output_scaled(SRV_Channel::k_throttle);
+    float rud_gain = float(plane.g2.rudd_dt_gain) / 100;
+    float rudder = rud_gain * SRV_Channels::get_output_scaled(SRV_Channel::k_rudder) / float(SERVO_MAX);
+    float throttle_left, throttle_right;
+    
+    if (throttle < 0 && aparm.throttle_min < 0) {
+        // doing reverse thrust
+        throttle_left  = constrain_float(throttle + 50 * rudder, -100, 0);
+        throttle_right = constrain_float(throttle - 50 * rudder, -100, 0);
+    } else {
+        // doing forward thrust
+        throttle_left  = constrain_float(throttle + 50 * rudder, 0, 100);
+        throttle_right = constrain_float(throttle - 50 * rudder, 0, 100);
+    }
+    SRV_Channels::set_output_scaled(SRV_Channel::k_throttleLeft, throttle_left);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_throttleRight, throttle_right);
 }
 
 
@@ -733,6 +777,9 @@ void Plane::set_servos(void)
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, override_pct);
     }
 
+    // support twin-engine aircraft
+    servos_twin_engine_mix();
+    
     // run output mixer and send values to the hal for output
     servos_output();
 }
@@ -747,6 +794,9 @@ void Plane::servos_output(void)
 {
     hal.rcout->cork();
 
+    // cope with tailsitters
+    quadplane.tailsitter_output();
+    
     // the mixers need pwm to be calculated now
     SRV_Channels::calc_pwm();
     

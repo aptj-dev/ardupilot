@@ -142,7 +142,7 @@ private:
     AP_Baro barometer;
     Compass compass;
     AP_InertialSensor ins;
-    RangeFinder sonar { serial_manager };
+    RangeFinder sonar { serial_manager, ROTATION_NONE };
     AP_Button button;
 
     // flight modes convenience array
@@ -185,7 +185,9 @@ private:
     // GCS handling
     AP_SerialManager serial_manager;
     const uint8_t num_gcs;
-    GCS_MAVLINK_Rover gcs[MAVLINK_COMM_NUM_BUFFERS];
+    GCS_MAVLINK_Rover gcs_chan[MAVLINK_COMM_NUM_BUFFERS];
+    GCS _gcs; // avoid using this; use gcs()
+    GCS &gcs() { return _gcs; }
 
     // relay support
     AP_Relay relay;
@@ -357,6 +359,9 @@ private:
 
     // set if we are driving backwards
     bool in_reverse;
+
+    // set if the users asks for auto reverse
+    bool in_auto_reverse;
 
     static const AP_Scheduler::Task scheduler_tasks[];
 

@@ -53,27 +53,14 @@ void Copter::init_rc_out()
     motors->init((AP_Motors::motor_frame_class)g2.frame_class.get(), (AP_Motors::motor_frame_type)g.frame_type.get());
 #if FRAME_CONFIG != HELI_FRAME
     motors->set_throttle_range(channel_throttle->get_radio_min(), channel_throttle->get_radio_max());
-#endif
-
-    // delay up to 2 second for first radio input
-    uint8_t i = 0;
-    while ((i++ < 100) && (last_radio_update_ms == 0)) {
-        delay(20);
-        read_radio();
-    }
-
+#else
     // setup correct scaling for ESCs like the UAVCAN PX4ESC which
-    // take a proportion of speed. 
+    // take a proportion of speed.
     hal.rcout->set_esc_scaling(channel_throttle->get_radio_min(), channel_throttle->get_radio_max());
+#endif
 
     // check if we should enter esc calibration mode
     esc_calibration_startup_check();
-
-    // enable output to motors
-    arming.pre_arm_rc_checks(true);
-    if (ap.pre_arm_rc_check) {
-        enable_motor_output();
-    }
 
     // refresh auxiliary channel to function map
     SRV_Channels::update_aux_servo_function();

@@ -1,5 +1,7 @@
 #include "Rover.h"
 
+static const int16_t CH_7_PWM_TRIGGER = 1800;
+
 void Rover::read_control_switch()
 {
     static bool switch_debouncer;
@@ -75,8 +77,6 @@ void Rover::reset_control_switch()
     read_control_switch();
 }
 
-#define CH_7_PWM_TRIGGER 1800
-
 // read at 10 hz
 // set this to your trainer switch
 void Rover::read_trim_switch()
@@ -138,9 +138,9 @@ void Rover::read_trim_switch()
 
 bool Rover::motor_active()
 {
-    // Check if armed and throttle is not neutral
+    // Check if armed and output throttle servo is not neutral
     if (hal.util->get_soft_armed()) {
-        if (SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) != channel_throttle->get_radio_trim()) {
+        if (SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) != 0) {
             return true;
         }
     }

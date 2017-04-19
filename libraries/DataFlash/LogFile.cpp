@@ -20,61 +20,6 @@
 
 extern const AP_HAL::HAL& hal;
 
-void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_types)
-{
-    if (_next_backend == DATAFLASH_MAX_BACKENDS) {
-        AP_HAL::panic("Too many backends");
-        return;
-    }
-    _num_types = num_types;
-    _structures = structures;
-
-#if defined(HAL_BOARD_LOG_DIRECTORY)
-    if (_params.backend_types == DATAFLASH_BACKEND_FILE ||
-        _params.backend_types == DATAFLASH_BACKEND_BOTH) {
-        DFMessageWriter_DFLogStart *message_writer =
-            new DFMessageWriter_DFLogStart(_firmware_string);
-        if (message_writer != nullptr)  {
-#if HAL_OS_POSIX_IO
-            backends[_next_backend] = new DataFlash_File(*this,
-                                                         message_writer,
-                                                         HAL_BOARD_LOG_DIRECTORY);
-#endif
-        }
-        if (backends[_next_backend] == nullptr) {
-            hal.console->printf("Unable to open DataFlash_File");
-        } else {
-            _next_backend++;
-        }
-    }
-#endif
-
-#if DATAFLASH_MAVLINK_SUPPORT
-    if (_params.backend_types == DATAFLASH_BACKEND_MAVLINK ||
-        _params.backend_types == DATAFLASH_BACKEND_BOTH) {
-        if (_next_backend == DATAFLASH_MAX_BACKENDS) {
-            AP_HAL::panic("Too many backends");
-            return;
-        }
-        DFMessageWriter_DFLogStart *message_writer =
-            new DFMessageWriter_DFLogStart(_firmware_string);
-        if (message_writer != nullptr)  {
-            backends[_next_backend] = new DataFlash_MAVLink(*this,
-                                                            message_writer);
-        }
-        if (backends[_next_backend] == nullptr) {
-            hal.console->printf("Unable to open DataFlash_MAVLink");
-        } else {
-            _next_backend++;
-        }
-    }
-#endif
-
-    for (uint8_t i=0; i<_next_backend; i++) {
-        backends[i]->Init();
-    }
-}
-
 // This function determines the number of whole or partial log files in the DataFlash
 // Wholly overwritten files are (of course) lost.
 uint16_t DataFlash_Block::get_num_logs(void)
@@ -737,9 +682,9 @@ void DataFlash_Class::Log_Write_GPS(const AP_GPS &gps, uint8_t i, uint64_t time_
         LOG_PACKET_HEADER_INIT((uint8_t)(LOG_GPA_MSG+i)),
         time_us       : time_us,
         vdop          : gps.get_vdop(i),
-        hacc          : (uint16_t)(hacc*100),
-        vacc          : (uint16_t)(vacc*100),
-        sacc          : (uint16_t)(sacc*100),
+        hacc          : (uint16_t)MIN((hacc*100), UINT16_MAX),
+        vacc          : (uint16_t)MIN((vacc*100), UINT16_MAX),
+        sacc          : (uint16_t)MIN((sacc*100), UINT16_MAX),
         have_vv       : (uint8_t)gps.have_vertical_velocity(i),
         sample_ms     : gps.last_message_time_ms(i)
     };
@@ -754,7 +699,9 @@ void DataFlash_Class::Log_Write_RFND(const RangeFinder &rangefinder)
         LOG_PACKET_HEADER_INIT((uint8_t)(LOG_RFND_MSG)),
         time_us       : AP_HAL::micros64(),
         dist1         : rangefinder.distance_cm(0),
-        dist2         : rangefinder.distance_cm(1)
+        orient1       : rangefinder.get_orientation(0),
+        dist2         : rangefinder.distance_cm(1),
+        orient2       : rangefinder.get_orientation(1)
     };
     WriteBlock(&pkt, sizeof(pkt));
 }
@@ -827,6 +774,7 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
     }
     float climbrate = baro.get_climb_rate();
     float drift_offset = baro.get_baro_drift_offset();
+    float ground_temp = baro.get_ground_temperature();
     struct log_BARO pkt = {
         LOG_PACKET_HEADER_INIT(LOG_BARO_MSG),
         time_us       : time_us,
@@ -836,6 +784,7 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
         climbrate     : climbrate,
         sample_time_ms: baro.get_last_update(0),
         drift_offset  : drift_offset,
+        ground_temp   : ground_temp,
     };
     WriteBlock(&pkt, sizeof(pkt));
 
@@ -849,6 +798,7 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
             climbrate     : climbrate,
             sample_time_ms: baro.get_last_update(1),
             drift_offset  : drift_offset,
+            ground_temp   : ground_temp,
         };
         WriteBlock(&pkt2, sizeof(pkt2));
     }
@@ -863,6 +813,7 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
             climbrate     : climbrate,
             sample_time_ms: baro.get_last_update(2),
             drift_offset  : drift_offset,
+            ground_temp   : ground_temp,
         };
         WriteBlock(&pkt3, sizeof(pkt3));
     }
@@ -1084,9 +1035,11 @@ void DataFlash_Class::Log_Write_AHRS2(AP_AHRS &ahrs)
 {
     Vector3f euler;
     struct Location loc;
+    Quaternion quat;
     if (!ahrs.get_secondary_attitude(euler) || !ahrs.get_secondary_position(loc)) {
         return;
     }
+    ahrs.get_secondary_quaternion(quat);
     struct log_AHRS pkt = {
         LOG_PACKET_HEADER_INIT(LOG_AHR2_MSG),
         time_us : AP_HAL::micros64(),
@@ -1095,7 +1048,11 @@ void DataFlash_Class::Log_Write_AHRS2(AP_AHRS &ahrs)
         yaw   : (uint16_t)(wrap_360_cd(degrees(euler.z)*100)),
         alt   : loc.alt*1.0e-2f,
         lat   : loc.lat,
-        lng   : loc.lng
+        lng   : loc.lng,
+        q1    : quat.q1,
+        q2    : quat.q2,
+        q3    : quat.q3,
+        q4    : quat.q4,
     };
     WriteBlock(&pkt, sizeof(pkt));
 }
@@ -1107,15 +1064,17 @@ void DataFlash_Class::Log_Write_POS(AP_AHRS &ahrs)
     if (!ahrs.get_position(loc)) {
         return;
     }
-    Vector3f pos;
-    ahrs.get_relative_position_NED(pos);
+    float home, origin;
+    ahrs.get_relative_position_D_home(home);
+    ahrs.get_relative_position_D_origin(origin);
     struct log_POS pkt = {
         LOG_PACKET_HEADER_INIT(LOG_POS_MSG),
-        time_us : AP_HAL::micros64(),
-        lat     : loc.lat,
-        lng     : loc.lng,
-        alt     : loc.alt*1.0e-2f,
-        rel_alt : -pos.z
+        time_us        : AP_HAL::micros64(),
+        lat            : loc.lat,
+        lng            : loc.lng,
+        alt            : loc.alt*1.0e-2f,
+        rel_home_alt   : -home,
+        rel_origin_alt : -origin
     };
     WriteBlock(&pkt, sizeof(pkt));
 }
@@ -1294,6 +1253,20 @@ void DataFlash_Class::Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
      };
     WriteBlock(&pkt5, sizeof(pkt5));
 
+    // log quaternion
+    Quaternion quat;
+    ahrs.get_NavEKF2().getQuaternion(0, quat);
+    struct log_Quaternion pktq1 = {
+        LOG_PACKET_HEADER_INIT(LOG_NKQ1_MSG),
+        time_us : time_us,
+        q1 : quat.q1,
+        q2 : quat.q2,
+        q3 : quat.q3,
+        q4 : quat.q4
+    };
+    WriteBlock(&pktq1, sizeof(pktq1));
+
+    
     // log innovations for the second IMU if enabled
     if (ahrs.get_NavEKF2().activeCores() >= 2) {
         // Write 6th EKF packet
@@ -1393,6 +1366,17 @@ void DataFlash_Class::Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
             primary : (int8_t)primaryIndex
         };
         WriteBlock(&pkt9, sizeof(pkt9));
+
+        ahrs.get_NavEKF2().getQuaternion(1, quat);
+        struct log_Quaternion pktq2 = {
+            LOG_PACKET_HEADER_INIT(LOG_NKQ2_MSG),
+            time_us : time_us,
+            q1 : quat.q1,
+            q2 : quat.q2,
+            q3 : quat.q3,
+            q4 : quat.q4
+        };
+        WriteBlock(&pktq2, sizeof(pktq2));
     }
 
     // write range beacon fusion debug packet if the range value is non-zero
@@ -1589,6 +1573,19 @@ void DataFlash_Class::Log_Write_EKF3(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
      };
     WriteBlock(&pkt5, sizeof(pkt5));
 
+    // log quaternion
+    Quaternion quat;
+    ahrs.get_NavEKF3().getQuaternion(0, quat);
+    struct log_Quaternion pktq1 = {
+        LOG_PACKET_HEADER_INIT(LOG_XKQ1_MSG),
+        time_us : time_us,
+        q1 : quat.q1,
+        q2 : quat.q2,
+        q3 : quat.q3,
+        q4 : quat.q4
+    };
+    WriteBlock(&pktq1, sizeof(pktq1));
+    
     // log innovations for the second IMU if enabled
     if (ahrs.get_NavEKF3().activeCores() >= 2) {
         // Write 6th EKF packet
@@ -1687,6 +1684,17 @@ void DataFlash_Class::Log_Write_EKF3(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
         };
         WriteBlock(&pkt9, sizeof(pkt9));
 
+        // log quaternion
+        ahrs.get_NavEKF3().getQuaternion(1, quat);
+        struct log_Quaternion pktq2 = {
+            LOG_PACKET_HEADER_INIT(LOG_XKQ2_MSG),
+            time_us : time_us,
+            q1 : quat.q1,
+            q2 : quat.q2,
+            q3 : quat.q3,
+            q4 : quat.q4
+        };
+        WriteBlock(&pktq2, sizeof(pktq2));        
     }
     // write range beacon fusion debug packet if the range value is non-zero
     uint8_t ID;
@@ -1808,6 +1816,24 @@ void DataFlash_Class::Log_Write_Trigger(const AP_AHRS &ahrs, const AP_GPS &gps, 
 
 // Write an attitude packet
 void DataFlash_Class::Log_Write_Attitude(AP_AHRS &ahrs, const Vector3f &targets)
+{
+    struct log_Attitude pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_ATTITUDE_MSG),
+        time_us         : AP_HAL::micros64(),
+        control_roll    : (int16_t)targets.x,
+        roll            : (int16_t)ahrs.roll_sensor,
+        control_pitch   : (int16_t)targets.y,
+        pitch           : (int16_t)ahrs.pitch_sensor,
+        control_yaw     : (uint16_t)targets.z,
+        yaw             : (uint16_t)ahrs.yaw_sensor,
+        error_rp        : (uint16_t)(ahrs.get_error_rp() * 100),
+        error_yaw       : (uint16_t)(ahrs.get_error_yaw() * 100)
+    };
+    WriteBlock(&pkt, sizeof(pkt));
+}
+
+// Write an attitude packet
+void DataFlash_Class::Log_Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets)
 {
     struct log_Attitude pkt = {
         LOG_PACKET_HEADER_INIT(LOG_ATTITUDE_MSG),

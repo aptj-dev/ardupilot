@@ -74,8 +74,9 @@ const AP_Scheduler::Task Plane::scheduler_tasks[] = {
     SCHED_TASK(log_perf_info,         0.2,    100),
     SCHED_TASK(compass_save,          0.1,    200),
     SCHED_TASK(Log_Write_Fast,         25,    300),
-    SCHED_TASK(update_logging1,        10,    300),
-    SCHED_TASK(update_logging2,        10,    300),
+    SCHED_TASK(update_logging1,        25,    300),
+    SCHED_TASK(update_logging2,        25,    300),
+    SCHED_TASK(update_soaring,         50,    400),
     SCHED_TASK(parachute_check,        10,    200),
     SCHED_TASK(terrain_update,         10,    200),
     SCHED_TASK(update_is_flying_5Hz,    5,    100),
@@ -175,8 +176,13 @@ void Plane::ahrs_update()
     }
 
     // calculate a scaled roll limit based on current pitch
-    roll_limit_cd = aparm.roll_limit_cd * cosf(ahrs.pitch);
-    pitch_limit_min_cd = aparm.pitch_limit_min_cd * fabsf(cosf(ahrs.roll));
+    roll_limit_cd = aparm.roll_limit_cd;
+    pitch_limit_min_cd = aparm.pitch_limit_min_cd;
+
+    if (!quadplane.tailsitter_active()) {
+        roll_limit_cd *= ahrs.cos_pitch();
+        pitch_limit_min_cd *= fabsf(ahrs.cos_roll());
+    }
 
     // updated the summed gyro used for ground steering and
     // auto-takeoff. Dot product of DCM.c with gyro vector gives earth
@@ -450,6 +456,8 @@ void Plane::update_GPS_50Hz(void)
 {
     // get position from AHRS
     have_position = ahrs.get_position(current_loc);
+    ahrs.get_relative_position_D_home(relative_altitude);
+    relative_altitude *= -1.0f;
 
     static uint32_t last_gps_reading[GPS_MAX_INSTANCES];
     gps.update();
@@ -552,7 +560,7 @@ void Plane::handle_auto_mode(void)
         // allow landing to restrict the roll limits
         nav_roll_cd = landing.constrain_roll(nav_roll_cd, g.level_roll_limit*100UL);
 
-        if (landing.is_complete()) {
+        if (landing.is_throttle_suppressed()) {
             // if landing is considered complete throttle is never allowed, regardless of landing type
             SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 0);
         } else {
@@ -756,7 +764,7 @@ void Plane::update_flight_mode(void)
     case QRTL: {
         // set nav_roll and nav_pitch using sticks
         int16_t roll_limit = MIN(roll_limit_cd, quadplane.aparm.angle_max);
-        nav_roll_cd  = channel_roll->norm_input() * roll_limit;
+        nav_roll_cd  = (channel_roll->get_control_in() / 4500.0) * roll_limit;
         nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit, roll_limit);
         float pitch_input = channel_pitch->norm_input();
         if (pitch_input > 0) {
@@ -943,7 +951,6 @@ void Plane::update_flight_stage(void)
                 } else {
                     set_flight_stage(AP_Vehicle::FixedWing::FLIGHT_LAND);
                 }
-
             } else if (quadplane.in_assisted_flight()) {
                 set_flight_stage(AP_Vehicle::FixedWing::FLIGHT_VTOL);
             } else {
@@ -1037,7 +1044,7 @@ float Plane::tecs_hgt_afe(void)
     } else {
         // when in normal flight we pass the hgt_afe as relative
         // altitude to home
-        hgt_afe = relative_altitude();
+        hgt_afe = relative_altitude;
     }
     return hgt_afe;
 }

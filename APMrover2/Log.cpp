@@ -164,6 +164,7 @@ struct PACKED log_Performance {
     int16_t  gyro_drift_z;
     uint8_t  i2c_lockup_count;
     uint16_t ins_error_count;
+    uint32_t mem_avail;
 };
 
 // Write a performance monitoring packet. Total length : 19 bytes
@@ -179,7 +180,8 @@ void Rover::Log_Write_Performance()
         gyro_drift_y    : (int16_t)(ahrs.get_gyro_drift().y * 1000),
         gyro_drift_z    : (int16_t)(ahrs.get_gyro_drift().z * 1000),
         i2c_lockup_count: 0,
-        ins_error_count : ins.error_count()
+        ins_error_count : ins.error_count(),
+        hal.util->available_memory()
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -440,7 +442,7 @@ void Rover::Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_targ
 const LogStructure Rover::log_structure[] = {
     LOG_COMMON_STRUCTURES,
     { LOG_PERFORMANCE_MSG, sizeof(log_Performance),
-      "PM",  "QIHIhhhBH", "TimeUS,LTime,MLC,gDt,GDx,GDy,GDz,I2CErr,INSErr" },
+      "PM",  "QIHIhhhBHI", "TimeUS,LTime,MLC,gDt,GDx,GDy,GDz,I2CErr,INSErr,Mem" },
     { LOG_STARTUP_MSG, sizeof(log_Startup),
       "STRT", "QBH",        "TimeUS,SType,CTot" },
     { LOG_CTUN_MSG, sizeof(log_Control_Tuning),
@@ -469,7 +471,7 @@ void Rover::log_init(void)
         DataFlash.Prep();
         gcs_send_text(MAV_SEVERITY_INFO, "Prepared log system");
         for (uint8_t i=0; i < num_gcs; i++) {
-            gcs[i].reset_cli_timeout();
+            gcs_chan[i].reset_cli_timeout();
         }
     }
 
@@ -499,6 +501,7 @@ void Rover::Log_Write_Vehicle_Startup_Messages()
     // only 200(?) bytes are guaranteed by DataFlash
     Log_Write_Startup(TYPE_GROUNDSTART_MSG);
     DataFlash.Log_Write_Mode(control_mode);
+    Log_Write_Home_And_Origin();
 }
 
 // start a new log

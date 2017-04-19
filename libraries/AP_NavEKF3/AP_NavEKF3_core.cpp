@@ -249,7 +249,7 @@ void NavEKF3_core::InitialiseVariables()
     baroStoreIndex = 0;
     rangeStoreIndex = 0;
     magStoreIndex = 0;
-    gpsStoreIndex = 0;
+    last_gps_idx = 0;
     tasStoreIndex = 0;
     ofStoreIndex = 0;
     delAngCorrection.zero();
@@ -800,7 +800,7 @@ void NavEKF3_core::calcOutputStates()
 /*
  * Calculate the predicted state covariance matrix using algebraic equations generated with Matlab symbolic toolbox.
  * The script file used to generate these and other equations in this filter can be found here:
- * https://github.com/priseborough/InertialNav/blob/master/derivations/RotationVectorAttitudeParameterisation/GenerateNavFilterEquations.m
+ * https://github.com/PX4/ecl/blob/master/matlab/scripts/Inertial%20Nav%20EKF/GenerateNavFilterEquations.m
 */
 void NavEKF3_core::CovariancePrediction()
 {

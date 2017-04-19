@@ -45,12 +45,12 @@ void NavEKF3_core::controlFilterModes()
  */
 uint8_t NavEKF3_core::effective_magCal(void) const
 {
-    // if we are on the 2nd core and _magCal is 3 then treat it as
-    // 2. This is a workaround for a mag fusion problem
-    if (frontend->_magCal ==3 && imu_index == 1) {
+    // force use of simple magnetic heading fusion for specified cores
+    if (frontend->_magMask & core_index) {
         return 2;
+    } else {
+        return frontend->_magCal;
     }
-    return frontend->_magCal;
 }
 
 // Determine if learning of wind and magnetic field will be enabled and set corresponding indexing limits to
@@ -252,8 +252,7 @@ void NavEKF3_core::setAidingMode()
                  maxLossTime_ms = frontend->posRetryTimeUseVel_ms;
              }
              posAidLossCritical = (imuSampleTime_ms - lastRngBcnPassTime_ms > maxLossTime_ms) &&
-                    (imuSampleTime_ms - lastPosPassTime_ms > maxLossTime_ms) &&
-                    (imuSampleTime_ms - lastVelPassTime_ms > maxLossTime_ms);
+                    (imuSampleTime_ms - lastPosPassTime_ms > maxLossTime_ms);
          }
 
          if (attAidLossCritical) {
@@ -341,13 +340,18 @@ void NavEKF3_core::setAidingMode()
 void NavEKF3_core::checkAttitudeAlignmentStatus()
 {
     // Check for tilt convergence - used during initial alignment
-    if (norm(P[0][0],P[1][1],P[2][2],P[3][3]) < sq(0.035f) && !tiltAlignComplete) {
-        tiltAlignComplete = true;
-        GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF3 IMU%u tilt alignment complete\n",(unsigned)imu_index);
+    // Once the tilt variances have reduced to equivalent of 3deg uncertainty, re-set the yaw and magnetic field states
+    // and declare the tilt alignment complete
+    if (!tiltAlignComplete) {
+        Vector3f angleErrVarVec = calcRotVecVariances();
+        if ((angleErrVarVec.x + angleErrVarVec.y) < sq(0.05235f)) {
+            tiltAlignComplete = true;
+            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF3 IMU%u tilt alignment complete\n",(unsigned)imu_index);
+        }
     }
 
-    // submit yaw and magnetic field reset request depending on whether we have compass data
-    if (use_compass()&& !yawAlignComplete  && tiltAlignComplete) {
+    // submit yaw and magnetic field reset request
+    if (!yawAlignComplete && tiltAlignComplete && use_compass()) {
             magYawResetRequest = true;
     }
 }

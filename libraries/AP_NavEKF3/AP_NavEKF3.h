@@ -1,8 +1,8 @@
 /*
-  24 state EKF based on https://github.com/priseborough/InertialNav
-  Converted from Matlab to C++ by Paul Riseborough
+  24 state EKF based on the derivation in https://github.com/PX4/ecl/
+  blob/master/matlab/scripts/Inertial%20Nav%20EKF/GenerateNavFilterEquations.m
 
-  EKF Tuning parameters refactored by Tom Cauchois
+  Converted from Matlab to C++ by Paul Riseborough
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -170,18 +170,18 @@ public:
     void getRotationBodyToNED(Matrix3f &mat) const;
 
     // return the quaternions defining the rotation from NED to XYZ (body) axes
-    void getQuaternion(Quaternion &quat) const;
+    void getQuaternion(int8_t instance, Quaternion &quat) const;
 
     // return the innovations for the specified instance
     // An out of range instance (eg -1) returns data for the the primary instance
-    void  getInnovations(int8_t index, Vector3f &velInnov, Vector3f &posInnov, Vector3f &magInnov, float &tasInnov, float &yawInnov);
+    void getInnovations(int8_t index, Vector3f &velInnov, Vector3f &posInnov, Vector3f &magInnov, float &tasInnov, float &yawInnov);
 
     // publish output observer angular, velocity and position tracking error
     void getOutputTrackingError(int8_t instance, Vector3f &error) const;
 
     // return the innovation consistency test ratios for the specified instance
     // An out of range instance (eg -1) returns data for the the primary instance
-    void  getVariances(int8_t instance, float &velVar, float &posVar, float &hgtVar, Vector3f &magVar, float &tasVar, Vector2f &offset);
+    void getVariances(int8_t instance, float &velVar, float &posVar, float &hgtVar, Vector3f &magVar, float &tasVar, Vector2f &offset);
 
     // should we use the compass? This is public so it can be used for
     // reporting via ahrs.use_compass()
@@ -194,7 +194,7 @@ public:
     // The sign convention is that a RH physical rotation of the sensor about an axis produces both a positive flow and gyro rate
     // msecFlowMeas is the scheduler time in msec when the optical flow data was received from the sensor.
     // posOffset is the XYZ flow sensor position in the body frame in m
-    void  writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset);
+    void writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset);
 
     // return data for debugging optical flow fusion for the specified instance
     // An out of range instance (eg -1) returns data for the the primary instance
@@ -242,7 +242,7 @@ public:
      7 = badly conditioned synthetic sideslip fusion
      7 = filter is not initialised
     */
-    void  getFilterFaults(int8_t instance, uint16_t &faults);
+    void getFilterFaults(int8_t instance, uint16_t &faults);
 
     /*
     return filter timeout status as a bitmasked integer for the specified instance
@@ -256,19 +256,19 @@ public:
      7 = unassigned
      7 = unassigned
     */
-    void  getFilterTimeouts(int8_t instance, uint8_t &timeouts);
+    void getFilterTimeouts(int8_t instance, uint8_t &timeouts);
 
     /*
     return filter gps quality check status for the specified instance
     An out of range instance (eg -1) returns data for the the primary instance
     */
-    void  getFilterGpsStatus(int8_t instance, nav_gps_status &faults);
+    void getFilterGpsStatus(int8_t instance, nav_gps_status &faults);
 
     /*
     return filter status flags for the specified instance
     An out of range instance (eg -1) returns data for the the primary instance
     */
-    void  getFilterStatus(int8_t instance, nav_filter_status &status);
+    void getFilterStatus(int8_t instance, nav_filter_status &status);
 
     // send an EKF_STATUS_REPORT message to GCS
     void send_status_report(mavlink_channel_t chan);
@@ -296,6 +296,9 @@ public:
 
     // report any reason for why the backend is refusing to initialise
     const char *prearm_failure_reason(void) const;
+
+    // set and save the _baroAltNoise parameter
+    void set_baro_alt_noise(float noise) { _baroAltNoise.set_and_save(noise); };
 
     // allow the enable flag to be set by Replay
     void set_enable(bool enable) { _enable.set(enable); }
@@ -358,6 +361,7 @@ private:
     AP_Int8  _rngBcnDelay_ms;       // effective average delay of range beacon measurements rel to IMU (msec)
     AP_Float _useRngSwSpd;          // Maximum horizontal ground speed to use range finder as the primary height source (m/s)
     AP_Float _accBiasLim;           // Accelerometer bias limit (m/s/s)
+    AP_Int8 _magMask;               // Bitmask forcng specific EKF core instances to use simple heading magnetometer fusion.
 
     // Tuning parameters
     const float gpsNEVelVarAccScale;    // Scale factor applied to NE velocity measurement variance due to manoeuvre acceleration

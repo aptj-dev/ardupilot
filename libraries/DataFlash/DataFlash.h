@@ -134,6 +134,7 @@ public:
     void Log_Write_ESC(void);
     void Log_Write_Airspeed(AP_Airspeed &airspeed);
     void Log_Write_Attitude(AP_AHRS &ahrs, const Vector3f &targets);
+    void Log_Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets);
     void Log_Write_Current(const AP_BattMonitor &battery);
     void Log_Write_Compass(const Compass &compass, uint64_t time_us=0);
     void Log_Write_Mode(uint8_t mode, uint8_t reason = 0);
@@ -269,4 +270,8 @@ private:
     
 private:
     static DataFlash_Class *_instance;
+
+    void validate_structures(const struct LogStructure *structures, const uint8_t num_types);
+    void dump_structure_field(const struct LogStructure *structure, const char *label, const uint8_t fieldnum);
+    void dump_structures(const struct LogStructure *structures, const uint8_t num_types);
 };

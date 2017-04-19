@@ -14,28 +14,28 @@
  */
 
 //
-//  GPS proxy driver for APM on PX4 platforms
-//  Code by Holger Steinhaus
+//  UAVCAN GPS driver
 //
 #pragma once
 
+#include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
 
 #include "AP_GPS.h"
 #include "GPS_Backend.h"
 
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
-#include <modules/uORB/topics/vehicle_gps_position.h>
-
-class AP_GPS_PX4 : public AP_GPS_Backend {
+class AP_GPS_UAVCAN : public AP_GPS_Backend {
 public:
-    AP_GPS_PX4(AP_GPS &_gps, AP_GPS::GPS_State &_state, AP_HAL::UARTDriver *_port);
-    ~AP_GPS_PX4();
+    AP_GPS_UAVCAN(AP_GPS &_gps, AP_GPS::GPS_State &_state, AP_HAL::UARTDriver *_port);
+    ~AP_GPS_UAVCAN() override;
 
-    bool read();
+    bool read() override;
 
+    // This method is called from UAVCAN thread
+    void handle_gnss_msg(const AP_GPS::GPS_State &msg) override;
 private:
-    int                           _gps_sub;
-    struct vehicle_gps_position_s _gps_pos;
+    bool _new_data;
+
+    AP_GPS::GPS_State _interm_state;
+    AP_HAL::Semaphore *_sem_gnss;
 };
-#endif // CONFIG_HAL_BOARD

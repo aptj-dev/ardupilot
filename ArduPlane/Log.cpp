@@ -162,17 +162,29 @@ void Plane::Log_Write_Attitude(void)
     targets.y = nav_pitch_cd;
     targets.z = 0;          //Plane does not have the concept of navyaw. This is a placeholder.
 
-    DataFlash.Log_Write_Attitude(ahrs, targets);
-    if (quadplane.in_vtol_mode()) {
-        DataFlash.Log_Write_PID(LOG_PIDR_MSG, quadplane.attitude_control->get_rate_roll_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDP_MSG, quadplane.attitude_control->get_rate_pitch_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDY_MSG, quadplane.attitude_control->get_rate_yaw_pid().get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDA_MSG, quadplane.pid_accel_z.get_pid_info() );
+    if (quadplane.tailsitter_active()) {
+        DataFlash.Log_Write_AttitudeView(*quadplane.ahrs_view, targets);
     } else {
-        DataFlash.Log_Write_PID(LOG_PIDR_MSG, rollController.get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDP_MSG, pitchController.get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDY_MSG, yawController.get_pid_info());
-        DataFlash.Log_Write_PID(LOG_PIDS_MSG, steerController.get_pid_info());
+        DataFlash.Log_Write_Attitude(ahrs, targets);
+    }
+    if (quadplane.in_vtol_mode() || quadplane.in_assisted_flight()) {
+        // log quadplane PIDs separately from fixed wing PIDs
+        DataFlash.Log_Write_PID(LOG_PIQR_MSG, quadplane.attitude_control->get_rate_roll_pid().get_pid_info());
+        DataFlash.Log_Write_PID(LOG_PIQP_MSG, quadplane.attitude_control->get_rate_pitch_pid().get_pid_info());
+        DataFlash.Log_Write_PID(LOG_PIQY_MSG, quadplane.attitude_control->get_rate_yaw_pid().get_pid_info());
+        DataFlash.Log_Write_PID(LOG_PIQA_MSG, quadplane.pid_accel_z.get_pid_info() );
+    }
+
+    DataFlash.Log_Write_PID(LOG_PIDR_MSG, rollController.get_pid_info());
+    DataFlash.Log_Write_PID(LOG_PIDP_MSG, pitchController.get_pid_info());
+    DataFlash.Log_Write_PID(LOG_PIDY_MSG, yawController.get_pid_info());
+    DataFlash.Log_Write_PID(LOG_PIDS_MSG, steerController.get_pid_info());
+    if (flight_stage == AP_Vehicle::FixedWing::FLIGHT_LAND) {
+        const DataFlash_Class::PID_Info *landing_info;
+        landing_info = landing.get_pid_info();
+        if (landing_info != nullptr) { // only log LANDING PID's while in landing
+            DataFlash.Log_Write_PID(LOG_PIDL_MSG, *landing_info);
+        }
     }
 
 #if AP_AHRS_NAVEKF_AVAILABLE
@@ -206,6 +218,7 @@ struct PACKED log_Performance {
     uint32_t g_dt_max;
     uint32_t g_dt_min;
     uint32_t log_dropped;
+    uint32_t mem_avail;
 };
 
 // Write a performance monitoring packet. Total length : 19 bytes
@@ -218,7 +231,8 @@ void Plane::Log_Write_Performance()
         main_loop_count : perf.mainLoop_count,
         g_dt_max        : perf.G_Dt_max,
         g_dt_min        : perf.G_Dt_min,
-        log_dropped     : DataFlash.num_dropped() - perf.last_log_dropped
+        log_dropped     : DataFlash.num_dropped() - perf.last_log_dropped,
+        hal.util->available_memory()
     };
     DataFlash.WriteCriticalBlock(&pkt, sizeof(pkt));
 }
@@ -343,15 +357,15 @@ struct PACKED log_Sonar {
 void Plane::Log_Write_Sonar()
 {
     uint16_t distance = 0;
-    if (rangefinder.status() == RangeFinder::RangeFinder_Good) {
-        distance = rangefinder.distance_cm();
+    if (rangefinder.status_orient(ROTATION_PITCH_270) == RangeFinder::RangeFinder_Good) {
+        distance = rangefinder.distance_cm_orient(ROTATION_PITCH_270);
     }
 
     struct log_Sonar pkt = {
         LOG_PACKET_HEADER_INIT(LOG_SONAR_MSG),
         time_us     : AP_HAL::micros64(),
         distance    : (float)distance*0.01f,
-        voltage     : rangefinder.voltage_mv()*0.001f,
+        voltage     : rangefinder.voltage_mv_orient(ROTATION_PITCH_270)*0.001f,
         count       : rangefinder_state.in_range_count,
         correction  : rangefinder_state.correction
     };
@@ -472,7 +486,7 @@ void Plane::Log_Write_Home_And_Origin()
 const struct LogStructure Plane::log_structure[] = {
     LOG_COMMON_STRUCTURES,
     { LOG_PERFORMANCE_MSG, sizeof(log_Performance), 
-      "PM",  "QHHIII",  "TimeUS,NLon,NLoop,MaxT,MinT,LogDrop" },
+      "PM",  "QHHIIII",  "TimeUS,NLon,NLoop,MaxT,MinT,LogDrop,Mem" },
     { LOG_STARTUP_MSG, sizeof(log_Startup),         
       "STRT", "QBH",         "TimeUS,SType,CTot" },
     { LOG_CTUN_MSG, sizeof(log_Control_Tuning),     
@@ -488,11 +502,19 @@ const struct LogStructure Plane::log_structure[] = {
     { LOG_STATUS_MSG, sizeof(log_Status),
       "STAT", "QBfBBBBBB",  "TimeUS,isFlying,isFlyProb,Armed,Safety,Crash,Still,Stage,Hit" },
     { LOG_QTUN_MSG, sizeof(QuadPlane::log_QControl_Tuning),
-      "QTUN", "Qffffehhffff", "TimeUS,AngBst,ThrOut,DAlt,Alt,BarAlt,DCRt,CRt,DVx,DVy,DAx,DAy" },
+      "QTUN", "Qffffhhfffff", "TimeUS,AngBst,ThrOut,DAlt,Alt,DCRt,CRt,DVx,DVy,DAx,DAy,TMix" },
 #if OPTFLOW == ENABLED
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow),
       "OF",   "QBffff",   "TimeUS,Qual,flowX,flowY,bodyX,bodyY" },
 #endif
+    { LOG_PIQR_MSG, sizeof(log_PID), \
+      "PIQR", "Qffffff",  "TimeUS,Des,P,I,D,FF,AFF" }, \
+    { LOG_PIQP_MSG, sizeof(log_PID), \
+      "PIQP", "Qffffff",  "TimeUS,Des,P,I,D,FF,AFF" }, \
+    { LOG_PIQY_MSG, sizeof(log_PID), \
+      "PIQY", "Qffffff",  "TimeUS,Des,P,I,D,FF,AFF" }, \
+    { LOG_PIQA_MSG, sizeof(log_PID), \
+      "PIQA", "Qffffff",  "TimeUS,Des,P,I,D,FF,AFF" }, \
 };
 
 #if CLI_ENABLED == ENABLED
@@ -517,6 +539,7 @@ void Plane::Log_Write_Vehicle_Startup_Messages()
     Log_Write_Startup(TYPE_GROUNDSTART_MSG);
     DataFlash.Log_Write_Mode(control_mode);
     DataFlash.Log_Write_Rally(rally);
+    Log_Write_Home_And_Origin();
 }
 
 // start a new log
@@ -542,9 +565,7 @@ void Plane::log_init(void)
         gcs_send_text(MAV_SEVERITY_INFO, "Preparing log system");
         DataFlash.Prep();
         gcs_send_text(MAV_SEVERITY_INFO, "Prepared log system");
-        for (uint8_t i=0; i<num_gcs; i++) {
-            gcs[i].reset_cli_timeout();
-        }
+        gcs().reset_cli_timeout();
     }
 }
 

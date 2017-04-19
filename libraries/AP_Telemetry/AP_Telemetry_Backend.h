@@ -23,19 +23,19 @@ class AP_Telemetry_Backend
 {
 public:
 
-    AP_Telemetry_Backend(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
-
-    // update - provide an opportunity to read/send telemetry
-    virtual void update() = 0;
-
+  AP_Telemetry_Backend(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+  
+  // update - provide an opportunity to read/send telemetry
+  virtual void update() = 0;
+  
   virtual int recv_mavlink_message(mavlink_message_t *msg){return 0;}
 
-    // send text
-    virtual void send_log(const char *str) {}
-    virtual void send_text_fmt(const char *str, const char *fmt, ...) {}
-
+  // send text
+  virtual void send_log(const char *str) {}
+  virtual void send_text_fmt(const char *str, const char *fmt, ...) {}
+  
 protected:
-
-    AP_Telemetry        &_frontend;
-    AP_HAL::UARTDriver  *_uart;
+  
+  AP_Telemetry        &_frontend;
+  AP_HAL::UARTDriver  *_uart;
 };
