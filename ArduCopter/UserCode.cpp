@@ -61,14 +61,29 @@ void Copter::userhook_SuperSlowLoop()
 
 
 
-            ::sprintf(buf,"id:\"%04d\",time:\"%s\",lat:%ld,lon:%ld,alt:%ld\n",
+            ::sprintf(buf,"id:\"%04d\",time:\"%s\",lat:%ld,lon:%ld,alt:%ld,mode:%d,armed:%d\n",
                     mavlink_system.sysid,
                     timebuf,
                     (long)loc.lat,
                     (long)loc.lng,
-                    (long)loc.alt);
+                    (long)loc.alt,
+                    control_mode,
+                    motors.armed()
+                    );
 
             telemetry.send_text(buf);
+            if (old_control_mode != control_mode) {
+                old_control_mode = control_mode;
+                ::sprintf(buf, "controll mode is %d", control_mode);
+                gcs_send_text(MAV_SEVERITY_INFO, buf);
+            }
+            if (old_armed != motors.armed()) {
+                old_armed = motors.armed();
+                ::sprintf(buf, "armed is %d", old_armed);
+                gcs_send_text(MAV_SEVERITY_INFO, buf);
+            }
+
+
         }
     mavlink_message_t msg;
 

@@ -234,6 +234,8 @@ private:
 
     // telemetry
     AP_Telemetry telemetry;
+    int old_control_mode = 0;
+    bool old_armed = false;
 
     // User variables
 #ifdef USERHOOK_VARIABLES
