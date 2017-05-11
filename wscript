@@ -255,7 +255,6 @@ def cleanMqtt(bld):
     
 def shutdown(ctx):
     if not ctx.options.mqtt_telemetry:
-        print("shutdown")
         cleanMqtt(ctx.exec_dict["bld"])
 
 def collect_dirs_to_recurse(bld, globs, **kw):
