@@ -8,7 +8,9 @@ import sys
 sys.path.insert(0, 'Tools/ardupilotwaf/')
 
 import ardupilotwaf
+import telemetry_mqtt
 import boards
+from datetime import datetime
 
 from waflib import Build, ConfigSet, Configure, Context, Utils
 
@@ -103,6 +105,13 @@ revisions.
         action='store_true',
         default=False,
         help='Force a static build')
+    
+    g.add_option('--enable-mqtt-telemetry',
+        dest='mqtt_telemetry',
+        action='store_true',
+        default=False,
+        help='Enable MQTT Telemetry.'
+    )
 
 def _collect_autoconfig_files(cfg):
     for m in sys.modules.values():
@@ -116,7 +125,7 @@ def _collect_autoconfig_files(cfg):
         for p in paths:
             if p in cfg.files or not os.path.isfile(p):
                 continue
-
+            
             with open(p, 'rb') as f:
                 cfg.hash = Utils.h_list((cfg.hash, f.read()))
                 cfg.files.append(p)
@@ -153,6 +162,10 @@ def configure(cfg):
     cfg.load('clang_compilation_database')
     cfg.load('waf_unit_test')
     cfg.load('mavgen')
+    cfg.load('uavcangen')
+    
+    if cfg.options.mqtt_telemetry:
+        copyMqtt(cfg)
 
     cfg.env.SUBMODULE_UPDATE = cfg.options.submodule_update
 
@@ -203,6 +216,47 @@ def configure(cfg):
 
     _collect_autoconfig_files(cfg)
 
+def copyMqtt(cfg):
+    mqttroot = cfg.srcnode.abspath() + '/modules/Mqtt/src/'
+    now = datetime.now().strftime('%Y\/%m\/%d %H:%M:%S')
+    major = '1'
+    minor = '0'
+    mkfile = open(mqttroot + '/../Makefile')
+    mklines = mkfile.readlines()
+    for line in mklines:
+        if 'MAJOR_VERSION' in line:
+            major = line.split('=')[1].strip()
+        if 'MINOR_VERSION' in line:
+            minor = line.split('=')[1].strip()
+            break
+    version = '{}.{}'.format(major, minor)
+    sedcmd = 'sed -e "s/@CLIENT_VERSION@/{}/g" -e "s/@BUILD_TIMESTAMP@/{}/g" {} > {}'.format(
+        version, now, mqttroot + 'VersionInfo.h.in', cfg.path.make_node('libraries/AP_Telemetry/VersionInfo.h'))
+    cfg.exec_command(sedcmd)
+    srcs = os.listdir(mqttroot)
+    for s in srcs:
+        if ('.c' in s or '.h' in s) and 'samples' not in s:
+            cfg.exec_command('cp -f {} {}'.format(
+                cfg.path.make_node('/modules/Mqtt/src/' + s),
+                cfg.path.make_node('libraries/AP_Telemetry/' + s))
+            )
+
+def cleanMqtt(bld):
+    print('Cleanup Mqtt files from AP_Telemetry direcotry')
+    aptroot = bld.path.make_node('/libraries/AP_Telemetry/')
+    mqttroot = bld.path.make_node('/modules/Mqtt/src/')
+    mqttfiles = os.listdir("{}".format(mqttroot))
+    for f in mqttfiles:
+        tgt = "{}/{}".format(aptroot, f)
+        if os.path.exists(tgt):
+            os.remove(tgt)
+        if f == 'VersionInfo.h.in':
+            os.remove("{}/{}".format(aptroot, "VersionInfo.h"))
+    
+def shutdown(ctx):
+    if not ctx.options.mqtt_telemetry:
+        cleanMqtt(ctx.exec_dict["bld"])
+
 def collect_dirs_to_recurse(bld, globs, **kw):
     dirs = []
     globs = Utils.to_list(globs)
@@ -214,6 +268,7 @@ def collect_dirs_to_recurse(bld, globs, **kw):
     for g in globs:
         for d in bld.srcnode.ant_glob(g + '/wscript', **kw):
             dirs.append(d.parent.relpath())
+
     return dirs
 
 def list_boards(ctx):
@@ -242,6 +297,17 @@ def _build_dynamic_sources(bld):
             bld.bldnode.make_node('libraries/GCS_MAVLink').abspath(),
         ],
     )
+
+    if bld.get_board().with_uavcan:
+        bld(
+            features='uavcangen',
+            source=bld.srcnode.ant_glob('modules/uavcan/dsdl/uavcan/**/*.uavcan'),
+            output_dir='modules/uavcan/libuavcan/include/dsdlc_generated',
+            name='uavcan',
+            export_includes=[
+                bld.bldnode.make_node('modules/uavcan/libuavcan/include/dsdlc_generated').abspath(),
+            ]
+        )
 
     def write_version_header(tsk):
         bld = tsk.generator.bld
@@ -295,6 +361,7 @@ def _build_recursion(bld):
     ]
 
     hal_dirs_patterns = [
+        'libraries/%s/tests',
         'libraries/%s/*/tests',
         'libraries/%s/*/benchmarks',
         'libraries/%s/examples/*',
@@ -339,9 +406,12 @@ def build(bld):
     bld.load('ardupilotwaf')
 
     bld.env.AP_LIBRARIES_OBJECTS_KW.update(
-        use='mavlink',
+        use=['mavlink'],
         cxxflags=['-include', 'ap_config.h'],
     )
+    
+    if bld.get_board().with_uavcan:
+        bld.env.AP_LIBRARIES_OBJECTS_KW['use'] += ['uavcan']
 
     _build_cmd_tweaks(bld)
 
@@ -370,7 +440,7 @@ ardupilotwaf.build_command('check-all',
     doc='shortcut for `waf check --alltests`',
 )
 
-for name in ('antennatracker', 'copter', 'plane', 'rover'):
+for name in ('antennatracker', 'copter', 'plane', 'rover', 'sub'):
     ardupilotwaf.build_command(name,
         program_group_list=name,
         doc='builds %s programs' % name,
