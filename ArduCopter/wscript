@@ -29,11 +29,16 @@ def build(bld):
             'AP_Avoidance',
             'AP_AdvancedFailsafe',
             'AP_Proximity',
-            'AP_Stats',
-            'AP_Gripper',
-            'AP_Beacon',
+            #### Copter 3.4 libraries ####
+            'AP_EPM',
+            'AP_Frsky_Telem',
+            'AP_Proximity',
+            #### Copter 3.5 libraries ####
+            #'AP_Stats',
+            #'AP_Gripper',
+            #'AP_Beacon',
+            #'AP_VisualOdom',
             'AP_Arming',
-            'AP_VisualOdom',
             'AP_Telemetry',
         ],
     )
@@ -43,7 +48,7 @@ def build(bld):
         program_name='arducopter',
         program_groups=['bin', 'copter'],
         use=[vehicle + '_libs'],
-        defines=['FRAME_CONFIG=MULTICOPTER_FRAME','USERHOOK_SUPERSLOWLOOP=1'],
+        defines=['FRAME_CONFIG=QUAD_FRAME','USERHOOK_SUPERSLOWLOOP=1'],
         )
 
     bld.ap_program(

@@ -72,7 +72,7 @@ void Copter::userhook_SuperSlowLoop()
   if (telemetry.recv_mavlink_message(&msg) != 0)
     {
       telemetry.send_text("Message arrived.");
-      gcs_chan[0].handleMessage(&msg);
+      gcs[0].handleMessage(&msg);
     }
 }
 #endif

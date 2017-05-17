@@ -298,16 +298,16 @@ def _build_dynamic_sources(bld):
         ],
     )
 
-    if bld.get_board().with_uavcan:
-        bld(
-            features='uavcangen',
-            source=bld.srcnode.ant_glob('modules/uavcan/dsdl/uavcan/**/*.uavcan'),
-            output_dir='modules/uavcan/libuavcan/include/dsdlc_generated',
-            name='uavcan',
-            export_includes=[
-                bld.bldnode.make_node('modules/uavcan/libuavcan/include/dsdlc_generated').abspath(),
-            ]
-        )
+    # if bld.get_board().with_uavcan:
+    # bld(
+    #     features='uavcangen',
+    #     source=bld.srcnode.ant_glob('modules/uavcan/dsdl/uavcan/**/*.uavcan'),
+    #     output_dir='modules/uavcan/libuavcan/include/dsdlc_generated',
+    #     name='uavcan',
+    #     export_includes=[
+    #         bld.bldnode.make_node('modules/uavcan/libuavcan/include/dsdlc_generated').abspath(),
+    #         ]
+    #     )
 
     def write_version_header(tsk):
         bld = tsk.generator.bld
@@ -410,8 +410,8 @@ def build(bld):
         cxxflags=['-include', 'ap_config.h'],
     )
     
-    if bld.get_board().with_uavcan:
-        bld.env.AP_LIBRARIES_OBJECTS_KW['use'] += ['uavcan']
+    # if bld.get_board().with_uavcan:
+    # bld.env.AP_LIBRARIES_OBJECTS_KW['use'] += ['uavcan']
 
     _build_cmd_tweaks(bld)
 
