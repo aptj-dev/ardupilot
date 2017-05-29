@@ -19,8 +19,14 @@
 //mqtt reconnect waiting timer value (sec) for publish connection
 #define MQTT_RECONNECT_TIMER 10
 
+#define MQTT_KEEP_ALIVE 20
+
+#define MQTT_CLEAR_SESSION 1
+
 #define QOS 1
 
 #define MAX_PAYLOAD 250
 
 #define MAX_TOPIC 250
+
+#define MQTT_SUCCESS_CALLBACK 1

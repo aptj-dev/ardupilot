@@ -48,7 +48,6 @@ void AP_Telemetry::send_text(const char *str)
             _drivers[i]->send_log(str);
         }
     }
-
 }
 
 int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
