@@ -32,8 +32,6 @@ extern "C" {
 }
 #endif
 
-#define MQTT_ENABLED 1
-
 // mqtt send_log on / off
 enum Mqtt_send_log {
     MQTT_SEND_LOG_OFF = 0,
@@ -47,6 +45,7 @@ enum Mqtt_connection_status {
 };
 
 class AP_Telemetry_MQTT : public AP_Telemetry_Backend {
+
 public:
     // get_MQTTClient - provide the address of the mqtt_client instance
     static MQTTAsync* get_MQTTClient();
@@ -66,13 +65,13 @@ public:
     void update() override;
 
     // send_log - Send gps location on the log topic
-    void send_log(const char *str) override;
+    void send_log(const char *str, const char* topic) override;
 
     // recv_mavlink_message - Read message if any from the wating queue
-    int recv_mavlink_message(mavlink_message_t *msg) override;
+    mqtt_res recv_mavlink_message(mavlink_message_t *msg) override;
 
     // subscribe_mqtt_topic - Mqtt action to directely subscribe to a topic
-    void subscribe_mqtt_topic(const char* topic, int qos);
+    void subscribe_mqtt_topic(const char* topic, mqtt_qos qos);
 
     // send_message - Mqtt action to send a payload on a mqtt topic
     void send_message(const char* str, const char* topic);
@@ -84,7 +83,7 @@ public:
     void append_mqtt_message(MQTTAsync_message* message);
 
     // MQTTHandle_error - Error handler when Mqtt function return a failure
-    void MQTTHandle_error(int rc);
+    void MQTTHandle_error(mqtt_res result);
 
     // connection_status - Current status of the mqtt connection
     enum Mqtt_connection_status connection_status = MQTT_DISCONNECTED;

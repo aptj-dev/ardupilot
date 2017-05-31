@@ -16,6 +16,7 @@
 #include "AP_Telemetry.h"
 #include "AP_Telemetry_Backend.h"
 #include "AP_Telemetry_MQTT.h"
+#include "define_MQTT.h"
 
 extern const AP_HAL::HAL& hal;
 
@@ -41,19 +42,18 @@ void AP_Telemetry::init(const AP_SerialManager &serial_manager, const AP_AHRS &a
     }
 }
 
-void AP_Telemetry::send_text(const char *str)
+void AP_Telemetry::send_text(const char *str, const char* topic)
 {
     for (uint8_t i=0; i<AP_TELEMETRY_MAX_INSTANCES; i++) {
         if (_drivers[i] != nullptr) {
-            _drivers[i]->send_log(str);
+            _drivers[i]->send_log(str, topic);
         }
     }
 }
 
-int AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
+mqtt_res AP_Telemetry::recv_mavlink_message(mavlink_message_t *msg)
 {
-    int ret;
-    ret = 0;
+    mqtt_res ret = 0;
     for (uint8_t i=0; i<AP_TELEMETRY_MAX_INSTANCES; i++) {
         if (_drivers[i] != nullptr) {
             ret = _drivers[i]->recv_mavlink_message(msg);

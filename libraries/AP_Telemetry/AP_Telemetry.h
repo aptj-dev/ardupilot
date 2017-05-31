@@ -20,6 +20,9 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+#include <stdint.h>
+
+#include "define_MQTT.h"
 
 #define AP_TELEMETRY_MAX_INSTANCES  1
 
@@ -38,10 +41,10 @@ public:
 
     // update - provide an opportunity to read/send telemetry
     void update();
-    int recv_mavlink_message(mavlink_message_t *msg);
+    mqtt_res recv_mavlink_message(mavlink_message_t *msg);
 
     // send text
-    void send_text(const char *str);
+    void send_text(const char *str, const char* topic);
     void send_text_fmt(const char *str, const char *fmt, ...) {}
 
 protected:

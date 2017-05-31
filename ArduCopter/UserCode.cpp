@@ -1,6 +1,5 @@
 #include "Copter.h"
 #include <time.h>
-#include <define_MQTT.h>
 
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
@@ -43,7 +42,7 @@ void Copter::userhook_SuperSlowLoop()
 {
     //  put your 1Hz code here
     if (&telemetry != nullptr) {
-        char topic_log[MAX_TOPIc];
+        char topic_log[250];
         ::sprintf(topic_log, "$ardupilot/copter/%s/log/%04d/location", get_frame_string(), mavlink_system.sysid);
         Location loc;
         if (ahrs.get_position(loc)) {

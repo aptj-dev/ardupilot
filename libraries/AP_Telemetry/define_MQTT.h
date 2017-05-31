@@ -15,6 +15,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+typedef uint8_t mqtt_res;
+typedef uint8_t mqtt_qos;
+typedef uint8_t str_len;
 
 //mqtt reconnect waiting timer value (sec) for publish connection
 #define MQTT_RECONNECT_TIMER 10
@@ -30,3 +35,7 @@
 #define MAX_TOPIC 250
 
 #define MQTT_SUCCESS_CALLBACK 1
+
+#define MQTT_ENABLED 1
+
+#define MQTT_ID_LEN 11

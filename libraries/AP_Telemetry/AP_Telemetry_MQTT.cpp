@@ -15,19 +15,17 @@
 
 #include "AP_Telemetry_MQTT.h"
 #include "define_MQTT.h"
-#include <stdio.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <pthread.h>
 #include <time.h>
 #include <string>
 
-#include <getopt.h>
-
 extern const AP_HAL::HAL& hal;
 
-extern int mqtt_to_mavlink_message(const char* cmd, mavlink_message_t *msg);
+extern uint8_t mqtt_to_mavlink_message(const char* cmd, mavlink_message_t *msg);
 
 MQTTAsync AP_Telemetry_MQTT::mqtt_client;
 AP_Telemetry_MQTT* AP_Telemetry_MQTT::telemetry_mqtt = nullptr;
@@ -63,7 +61,7 @@ AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver*
 
 void AP_Telemetry_MQTT::init_mqtt()
 {
-    int result;
+    mqtt_res result;
     mqtt_mutex_store = PTHREAD_MUTEX_INITIALIZER;
     mqtt_mutex = &mqtt_mutex_store;
     pthread_mutexattr_t attr;
@@ -71,7 +69,7 @@ void AP_Telemetry_MQTT::init_mqtt()
 
     recv_msg_list = ListInitialize();
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
-    if ((result = pthread_mutex_init(mqtt_mutex, &attr)) != 0) {
+    if ((result = pthread_mutex_init(mqtt_mutex, &attr)) != MQTTASYNC_SUCCESS) {
         printf("init: error %d initializing mqtt_mutex\n", result);
         MQTTHandle_error(result);
     } else {
@@ -83,9 +81,9 @@ void AP_Telemetry_MQTT::init_mqtt()
         conn_options.onFailure = onConnectFailure;
         conn_options.context = mqtt_client;
 
-        char clientid[9] = "no_id";
-        srand((unsigned int)time(0));
-        sprintf(clientid, "client_%d", rand()%100);
+        char clientid[MQTT_ID_LEN] = "no_id";
+        srand((unsigned int)time(NULL));
+        sprintf(clientid, "client_%d", rand()%10000);
 
         if ((result = MQTTAsync_create(&mqtt_client, mqtt_server, clientid, MQTTCLIENT_PERSISTENCE_NONE, nullptr)) != MQTTASYNC_SUCCESS) {
             printf("Failed to create Client, return code %d\n", result);
@@ -116,24 +114,19 @@ void AP_Telemetry_MQTT::set_mqtt_password(const char* password)
     conn_options.password = password;
 }
 
-void AP_Telemetry_MQTT::send_log(const char* str)
+void AP_Telemetry_MQTT::send_log(const char* str, const char* topic)
 {
-    char topic[MAX_PAYLOAD];
-    if (send_log_flag == MQTT_SEND_LOG_ON) {
-        if (connection_status == MQTT_CONNECTED) {
-            sprintf(topic, "$ardupilot/copter/quad/log/%04d/location",
-                    mavlink_system.sysid);
-            send_message(str, topic);
-        }
+    if (send_log_flag == MQTT_SEND_LOG_ON && connection_status == MQTT_CONNECTED) {
+        send_message(str, topic);
     }
 }
 
 void AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
 {
-    int result;
+    mqtt_res result;
     MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
     char tmp[MAX_PAYLOAD];
-    int payloadlen = strlen(str);
+    str_len payloadlen = strlen(str);
 
     strncpy(tmp, str, payloadlen);
     pubmsg.payload = tmp;
@@ -146,10 +139,10 @@ void AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
     }
 }
 
-void AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, int qos)
+void AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, mqtt_qos qos)
 {
     if (connection_status == MQTT_CONNECTED) {
-        int result;
+        mqtt_res result;
         if ((result = MQTTAsync_subscribe(mqtt_client, topic, qos, nullptr)) != MQTTASYNC_SUCCESS) {
             printf("Failed to start subscribe, return code %d\n", result);
             MQTTHandle_error(result);
@@ -157,14 +150,14 @@ void AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, int qos)
     }
 }
 
-int AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
+mqtt_res AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
 {
-    int result = 0;
+    mqtt_res result = 0;
     char str_mqtt[MAX_PAYLOAD];
     str_mqtt[0] = '\0';
     AP_Telemetry_MQTT::pop_mqtt_message(str_mqtt);
-    if (str_mqtt[0] != '\0') {
-        result = mqtt_to_mavlink_message(str_mqtt, msg);
+    if (str_mqtt[0] == '\0' || mqtt_to_mavlink_message(str_mqtt, msg) != 1) {
+        MQTTHandle_error(result);
     }
     return result;
 }
@@ -192,7 +185,7 @@ void AP_Telemetry_MQTT::append_mqtt_message(MQTTAsync_message* message)
     }
 }
 
-void AP_Telemetry_MQTT::MQTTHandle_error(int result)
+void AP_Telemetry_MQTT::MQTTHandle_error(mqtt_res result)
 {
     switch (result) {
     case MQTTASYNC_SUCCESS:

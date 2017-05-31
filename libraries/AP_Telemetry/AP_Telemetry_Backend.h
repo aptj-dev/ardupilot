@@ -17,7 +17,9 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+
 #include "AP_Telemetry.h"
+#include "define_MQTT.h"
 
 class AP_Telemetry_Backend {
 public:
@@ -27,12 +29,12 @@ public:
     // update - provide an opportunity to read/send telemetry
     virtual void update() = 0;
 
-    virtual int recv_mavlink_message(mavlink_message_t *msg) {
+    virtual mqtt_res recv_mavlink_message(mavlink_message_t *msg) {
         return 0;
     }
 
     // send text
-    virtual void send_log(const char *str) {}
+    virtual void send_log(const char *str, const char* topic) {}
     virtual void send_text_fmt(const char *str, const char *fmt, ...) {}
 
 protected:

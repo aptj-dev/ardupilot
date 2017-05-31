@@ -19,9 +19,9 @@
 #include "AP_Telemetry_MQTT.h"
 #include "define_MQTT.h"
 
-extern int mqtt_to_mavlink_message(const char* mqtt_cmd, mavlink_message_t *msg)
+extern uint8_t mqtt_to_mavlink_message(const char* mqtt_cmd, mavlink_message_t *msg)
 {
-    int ret;
+    uint8_t ret;
     char cmd[MAX_PAYLOAD];
 
     strcpy(cmd, mqtt_cmd);
@@ -29,7 +29,6 @@ extern int mqtt_to_mavlink_message(const char* mqtt_cmd, mavlink_message_t *msg)
     AP_Telemetry_MQTT* tele_mqtt = AP_Telemetry_MQTT::get_telemetry_mqtt();
     char topic[MAX_TOPIC];
 
-    printf("received mqtt from Pc %s \n", cmd);
     if (strncmp(cmd, "arm", 3) == 0) {
         sprintf(topic, "$ardupilot/copter/quad/ack/%04d", mavlink_system.sysid);
         //arm コマンド発行

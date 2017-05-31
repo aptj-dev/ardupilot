@@ -359,15 +359,15 @@ void HAL_Linux::run(int argc, char* const argv[], Callbacks* callbacks) const
             module_path = gopt.optarg;
             break;
 #ifdef MQTT_ENABLED
-	case 'Q':
-	    AP_Telemetry_MQTT::set_mqtt_server(gopt.optarg);
-	    break;
+        case 'Q':
+            AP_Telemetry_MQTT::set_mqtt_server(gopt.optarg);
+            break;
         case 'U':
-	    AP_Telemetry_MQTT::set_mqtt_user(gopt.optarg);
-	    break;
+            AP_Telemetry_MQTT::set_mqtt_user(gopt.optarg);
+            break;
         case 'P':
-	    AP_Telemetry_MQTT::set_mqtt_password(gopt.optarg);
-	    break;
+            AP_Telemetry_MQTT::set_mqtt_password(gopt.optarg);
+            break;
 #endif
         case 'h':
             _usage();
