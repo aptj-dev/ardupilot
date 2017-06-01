@@ -81,9 +81,9 @@ void AP_Telemetry_MQTT::init_mqtt()
         conn_options.onFailure = onConnectFailure;
         conn_options.context = mqtt_client;
 
-        char clientid[MQTT_ID_LEN] = "no_id";
+        mqtt_id clientid = "no_id";
         srand((unsigned int)time(NULL));
-        sprintf(clientid, "client_%d", rand()%10000);
+        sprintf(clientid, "client_%u", rand()%10000);
 
         if ((result = MQTTAsync_create(&mqtt_client, mqtt_server, clientid, MQTTCLIENT_PERSISTENCE_NONE, nullptr)) != MQTTASYNC_SUCCESS) {
             printf("Failed to create Client, return code %d\n", result);
@@ -136,6 +136,8 @@ void AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
     if ((result = MQTTAsync_sendMessage(mqtt_client, topic, &pubmsg, nullptr)) != MQTTASYNC_SUCCESS) {
         printf("Failed to start sendMessage, return code %d\n", result);
         MQTTHandle_error(result);
+    } else {
+        update();
     }
 }
 
@@ -228,19 +230,9 @@ int mqtt_msg_arrived(void *context, char *topicName, int topicLen, MQTTAsync_mes
 void AP_Telemetry_MQTT::update()
 {
     // exit immediately if no uart
-    if (_uart != nullptr && _frontend._ahrs != nullptr) {
-        // send telemetry data once per second
-        uint32_t now = AP_HAL::millis();
-        if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
-            _last_send_ms = now;
-            Location loc;
-            if (_frontend._ahrs->get_position(loc)) {
-                char buf[100];
-                ::sprintf(buf,"lat:%ld lon:%ld alt:%ld\n",
-                          (long)loc.lat,
-                          (long)loc.lng,
-                          (long)loc.alt);
-            }
-        }
+    // send telemetry data once per second
+    uint32_t now = AP_HAL::millis();
+    if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
+        _last_send_ms = now;
     }
 }

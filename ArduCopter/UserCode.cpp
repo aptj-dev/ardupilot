@@ -51,7 +51,7 @@ void Copter::userhook_SuperSlowLoop()
             time_t now_time;
             struct tm *t_st;
             time(&now_time);
-            t_st = localtime(&now_time);
+            t_st = gmtime(&now_time);
             ::sprintf(timebuf, "%04d%02d%02d%02d%02d%02d",
                       t_st->tm_year + 1900,
                       t_st->tm_mon + 1,
