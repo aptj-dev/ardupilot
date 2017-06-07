@@ -16,26 +16,22 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AHRS/AP_AHRS.h>
-#include <AP_SerialManager/AP_SerialManager.h>
-#include "AP_Telemetry.h"
 
-class AP_Telemetry_Backend
-{
+#include "define_MQTT.h"
+
+class AP_Telemetry_Backend {
 public:
 
-    AP_Telemetry_Backend(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+    AP_Telemetry_Backend(AP_HAL::UARTDriver* uart, const AP_AHRS *_ahrs);
 
     // update - provide an opportunity to read/send telemetry
-    virtual void update() = 0;
+    virtual void update(mavlink_message_t *msg) = 0;
 
-  virtual int recv_mavlink_message(mavlink_message_t *msg){return 0;}
+    virtual mqtt_res recv_mavlink_message(mavlink_message_t *msg) = 0;
 
-    // send text
-    virtual void send_log(const char *str) {}
-    virtual void send_text_fmt(const char *str, const char *fmt, ...) {}
 
 protected:
 
-    AP_Telemetry        &_frontend;
     AP_HAL::UARTDriver  *_uart;
+    const AP_AHRS *_ahrs;
 };

@@ -160,7 +160,7 @@ void Copter::init_ardupilot()
 #endif
 
     // init telemetry
-    telemetry.init(serial_manager, ahrs);
+    telemetry.init(serial_manager, ahrs, gcs[0]);
 
 #if LOGGING_ENABLED == ENABLED
     log_init();

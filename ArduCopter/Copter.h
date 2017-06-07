@@ -233,7 +233,7 @@ private:
     GCS_MAVLINK_Copter gcs[MAVLINK_COMM_NUM_BUFFERS];
 
     // telemetry
-    AP_Telemetry telemetry;
+    AP_Telemetry<GCS_MAVLINK_Copter> telemetry;
 
     // User variables
 #ifdef USERHOOK_VARIABLES
