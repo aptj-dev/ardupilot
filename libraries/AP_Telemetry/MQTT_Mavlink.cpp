@@ -265,10 +265,10 @@ extern uint8_t mqtt_to_mavlink_message(const char* mqtt_cmd, mavlink_message_t *
         ret = 1;
     } else if (strcmp(cmd, "mqtt log_off") == 0) {
         tele_mqtt->send_log_flag = MQTT_SEND_LOG_OFF;
-        ret = 1;
+        ret = true;
     } else if (strcmp(cmd, "mqtt log_on") == 0) {
         tele_mqtt->send_log_flag = MQTT_SEND_LOG_ON;
-        ret = 1;
+        ret = true;
     }
     return ret;
 }

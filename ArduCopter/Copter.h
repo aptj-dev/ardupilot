@@ -245,7 +245,7 @@ private:
     GCS &gcs() { return _gcs; }
 
     // telemetry
-    AP_Telemetry telemetry;
+    AP_Telemetry<GCS_MAVLINK_Copter> telemetry;
 
     // User variables
 #ifdef USERHOOK_VARIABLES

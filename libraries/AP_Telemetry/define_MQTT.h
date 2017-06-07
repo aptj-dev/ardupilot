@@ -30,8 +30,6 @@
 
 #define MAX_TOPIC 250
 
-#define MQTT_SUCCESS_CALLBACK 1
-
 #define MQTT_ENABLED 1
 
 #define MQTT_ID_LEN 11

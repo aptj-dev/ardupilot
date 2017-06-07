@@ -17,7 +17,7 @@
 
 extern const AP_HAL::HAL& hal;
 
-AP_Telemetry_Backend::AP_Telemetry_Backend(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
-    _frontend(frontend),
-    _uart(uart)
+AP_Telemetry_Backend::AP_Telemetry_Backend(AP_HAL::UARTDriver* uart, const AP_AHRS *ahrs) :
+    _uart(uart),
+    _ahrs(ahrs)
 {}

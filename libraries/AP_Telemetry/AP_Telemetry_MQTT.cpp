@@ -13,15 +13,11 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "AP_Telemetry_MQTT.h"
-#include "define_MQTT.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
 #include <pthread.h>
 #include <time.h>
-#include <string>
+
+#include "define_MQTT.h"
+#include "AP_Telemetry_MQTT.h"
 
 extern const AP_HAL::HAL& hal;
 
@@ -46,17 +42,17 @@ AP_Telemetry_MQTT* AP_Telemetry_MQTT::get_telemetry_mqtt()
     return telemetry_mqtt;
 }
 
-AP_Telemetry_MQTT* AP_Telemetry_MQTT::init_telemetry_mqtt(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart)
+AP_Telemetry_MQTT* AP_Telemetry_MQTT::init_telemetry_mqtt(AP_HAL::UARTDriver* uart, const AP_AHRS *ahrs)
 {
     if (telemetry_mqtt == nullptr) {
-        telemetry_mqtt = new AP_Telemetry_MQTT(frontend, uart);
+        telemetry_mqtt = new AP_Telemetry_MQTT(uart, ahrs);
         telemetry_mqtt->init_mqtt();
     }
     return telemetry_mqtt;
 }
 
-AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart) :
-    AP_Telemetry_Backend(frontend, uart)
+AP_Telemetry_MQTT::AP_Telemetry_MQTT(AP_HAL::UARTDriver* uart, const AP_AHRS *ahrs) :
+    AP_Telemetry_Backend(uart, ahrs)
 {}
 
 void AP_Telemetry_MQTT::init_mqtt()
@@ -114,11 +110,11 @@ void AP_Telemetry_MQTT::set_mqtt_password(const char* password)
     conn_options.password = password;
 }
 
-void AP_Telemetry_MQTT::send_log(const char* str, const char* topic)
+void AP_Telemetry_MQTT::send_log(const char* str)
 {
-    if (send_log_flag == MQTT_SEND_LOG_ON && connection_status == MQTT_CONNECTED) {
-        send_message(str, topic);
-    }
+    char log_topic[MAX_TOPIC];
+    sprintf(log_topic, "$ardupilot/copter/quad/command/%04d/", mavlink_system.sysid);
+    send_message(str, log_topic);
 }
 
 void AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
@@ -136,9 +132,7 @@ void AP_Telemetry_MQTT::send_message(const char *str, const char *topic)
     if ((result = MQTTAsync_sendMessage(mqtt_client, topic, &pubmsg, nullptr)) != MQTTASYNC_SUCCESS) {
         printf("Failed to start sendMessage, return code %d\n", result);
         MQTTHandle_error(result);
-    } else {
-        update();
-    }
+    } 
 }
 
 void AP_Telemetry_MQTT::subscribe_mqtt_topic(const char *topic, mqtt_qos qos)
@@ -158,7 +152,7 @@ mqtt_res AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
     char str_mqtt[MAX_PAYLOAD];
     str_mqtt[0] = '\0';
     AP_Telemetry_MQTT::pop_mqtt_message(str_mqtt);
-    if (str_mqtt[0] == '\0' || mqtt_to_mavlink_message(str_mqtt, msg) != 1) {
+    if (str_mqtt[0] == '\0' || mqtt_to_mavlink_message(str_mqtt, msg) != true) {
         MQTTHandle_error(result);
     }
     return result;
@@ -185,6 +179,7 @@ void AP_Telemetry_MQTT::append_mqtt_message(MQTTAsync_message* message)
     } else {
         MQTTAsync_freeMessage(&message);
     }
+
 }
 
 void AP_Telemetry_MQTT::MQTTHandle_error(mqtt_res result)
@@ -210,7 +205,6 @@ void onConnect(void *context, MQTTAsync_successData* response)
     char payload[MAX_PAYLOAD];
     sprintf(payload, "New client: %04d", mavlink_system.sysid);
     tele_mqtt->send_message(payload, "$ardupilot/identification");
-    tele_mqtt->send_log_flag = MQTT_SEND_LOG_OFF;
 }
 
 void onConnectFailure(void* context, MQTTAsync_failureData* response)
@@ -223,16 +217,48 @@ int mqtt_msg_arrived(void *context, char *topicName, int topicLen, MQTTAsync_mes
     AP_Telemetry_MQTT* tele_mqtt = AP_Telemetry_MQTT::get_telemetry_mqtt();
     tele_mqtt->append_mqtt_message(message);
     MQTTAsync_free(topicName);
-    return MQTT_SUCCESS_CALLBACK;
+    return true;
 }
 
 // update - provide an opportunity to read/send telemetry
-void AP_Telemetry_MQTT::update()
+void AP_Telemetry_MQTT::update(mavlink_message_t *msg)
 {
     // exit immediately if no uart
-    // send telemetry data once per second
-    uint32_t now = AP_HAL::millis();
-    if (_last_send_ms == 0 || (now - _last_send_ms) > 1000) {
-        _last_send_ms = now;
+    if (_uart == nullptr || _ahrs == nullptr) {
+        return;
     }
+
+    if (send_log_flag == MQTT_SEND_LOG_ON && connection_status == MQTT_CONNECTED) {
+        // send telemetry data once per second
+        uint32_t now = AP_HAL::millis();
+        if (_last_send_ms == 0 || (now - _last_send_ms) > 900) {
+            Location loc;
+            if (_ahrs->get_position(loc)) {
+                char buf[MAX_PAYLOAD];
+                char timebuf[MAX_PAYLOAD];
+                time_t now_time;
+                struct tm *t_st;
+                time(&now_time);
+                t_st = gmtime(&now_time);
+                ::sprintf(timebuf, "%04d%02d%02d%02d%02d%02d",
+                          t_st->tm_year + 1900,
+                          t_st->tm_mon + 1,
+                          t_st->tm_mday,
+                          t_st->tm_hour,
+                          t_st->tm_min,
+                          t_st->tm_sec);
+                ::sprintf(buf,"id:\"%04d\",time:\"%s\",lat:%ld,lon:%ld,alt:%ld\n",
+                          mavlink_system.sysid,
+                          timebuf,
+                          (long)loc.lat,
+                          (long)loc.lng,
+                          (long)loc.alt);
+                send_log(buf);
+            } else {
+                send_log("Could not found location.");
+            }
+            _last_send_ms = now;
+        }
+    }
+    recv_mavlink_message(msg);
 }

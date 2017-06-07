@@ -16,15 +16,14 @@
 #pragma once
 
 #include <AP_AHRS/AP_AHRS.h>
-#include <AP_SerialManager/AP_SerialManager.h>
-#include <string>
+
 #include "AP_Telemetry_Backend.h"
+#include "define_MQTT.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#include "define_MQTT.h"
 #include "MQTTAsync.h"
 #include "LinkedList.h"
 
@@ -54,7 +53,7 @@ public:
     static AP_Telemetry_MQTT* get_telemetry_mqtt();
 
     // init_telemetry_mqtt - initialize the AP_Telemetry_MQTT library and mqtt client
-    static AP_Telemetry_MQTT* init_telemetry_mqtt(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+    static AP_Telemetry_MQTT* init_telemetry_mqtt(AP_HAL::UARTDriver* uart, const AP_AHRS *ahrs);
 
     // set_mqtt_xxx - set the parameter for the mqtt connection (read from command line options)
     static void set_mqtt_server(const char* server);
@@ -62,10 +61,10 @@ public:
     static void set_mqtt_password(const char* password);
 
     // update - provide an opportunity to read/send telemetry
-    void update() override;
+    void update(mavlink_message_t *msg) override;
 
     // send_log - Send gps location on the log topic
-    void send_log(const char *str, const char* topic) override;
+    void send_log(const char *str);
 
     // recv_mavlink_message - Read message if any from the wating queue
     mqtt_res recv_mavlink_message(mavlink_message_t *msg) override;
@@ -89,12 +88,12 @@ public:
     enum Mqtt_connection_status connection_status = MQTT_DISCONNECTED;
 
     // send_log_flag - Flag that enable to send mqtt message
-    enum Mqtt_send_log send_log_flag = MQTT_SEND_LOG_ON;
+    enum Mqtt_send_log send_log_flag = MQTT_SEND_LOG_OFF;
 
 
 private:
     // Private constructor to limit to a single instance
-    AP_Telemetry_MQTT(AP_Telemetry &frontend, AP_HAL::UARTDriver* uart);
+    AP_Telemetry_MQTT(AP_HAL::UARTDriver* uart, const AP_AHRS *ahrs);
 
     // recv_msg_list - Waiting list for mqtt message
     List* recv_msg_list;
