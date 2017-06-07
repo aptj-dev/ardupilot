@@ -295,8 +295,8 @@ void HAL_Linux::run(int argc, char* const argv[], Callbacks* callbacks) const
         {"terrain-directory",   true,  0, 't'},
         {"module-directory",    true,  0, 'M'},
         {"mqtt_server",         true,  0, 'Q'},
-	{"mqtt_user",           true,  0, 'U'},
-	{"mqtt_password",       true,  0, 'P'},
+        {"mqtt_user",           true,  0, 'U'},
+        {"mqtt_password",       true,  0, 'P'},
         {"help",                false,  0, 'h'},
         {0, false, 0, 0}
     };
@@ -344,7 +344,7 @@ void HAL_Linux::run(int argc, char* const argv[], Callbacks* callbacks) const
         case 'M':
             module_path = gopt.optarg;
             break;
-#if MQTT_SERVICE == MQTT_ENABLED
+#if MQTT_ENABLED
 	case 'Q':
 	  AP_Telemetry_MQTT::set_mqtt_server(gopt.optarg);
 	  break;
