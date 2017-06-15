@@ -97,7 +97,7 @@ void AP_Telemetry<GCS_MAVLINK_Vehicle>::update()
                 {
                     mavlink_message_t msg;
                     _drivers[i]->update(&msg);
-                    if(&msg != nullptr)
+                    if(msg.msgid == MAVLINK_MSG_ID_COMMAND_LONG || msg.msgid == MAVLINK_MSG_ID_SET_MODE)
                         {
                             _gcs_chan->handleMessage(&msg);
                         }

@@ -76,7 +76,7 @@ public:
     void send_message(const char* str, const char* topic);
 
     // pop_mqtt_message - Retrieve mqtt message from the waiting queue
-    void pop_mqtt_message(char* str_mqtt);
+    //void pop_mqtt_message(char* str_mqtt);
 
     // append_mqtt_message - Append a message to the waiting queue
     void append_mqtt_message(MQTTAsync_message* message);
