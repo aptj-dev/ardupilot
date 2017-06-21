@@ -150,7 +150,6 @@ mqtt_res AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
 {
     mqtt_res result = 0;
     char str_mqtt[MAX_PAYLOAD];
-    str_mqtt[0] = '\0';
     MQTTAsync_message* message = nullptr;
     if (pthread_mutex_lock(AP_Telemetry_MQTT::mqtt_mutex) == 0) {
         message = (MQTTAsync_message*)ListDetachHead(recv_msg_list);
@@ -158,8 +157,8 @@ mqtt_res AP_Telemetry_MQTT::recv_mavlink_message(mavlink_message_t *msg)
     }
     if (message != nullptr) {
         strncpy(str_mqtt, (char*)message->payload, message->payloadlen);
-        mqtt_to_mavlink_message(str_mqtt, msg);
-        printf("New message: %d\n", msg->msgid);
+        if (mqtt_to_mavlink_message(str_mqtt, msg)) {
+        }
         MQTTHandle_error(result);
     }
     return result;
@@ -221,6 +220,8 @@ void AP_Telemetry_MQTT::update(mavlink_message_t *msg)
     if (_uart == nullptr || _ahrs == nullptr) {
         return;
     }
+    
+    recv_mavlink_message(msg);
 
     if (send_log_flag == MQTT_SEND_LOG_ON && connection_status == MQTT_CONNECTED) {
         // send telemetry data once per second
@@ -254,5 +255,4 @@ void AP_Telemetry_MQTT::update(mavlink_message_t *msg)
             _last_send_ms = now;
         }
     }
-    recv_mavlink_message(msg);
 }
