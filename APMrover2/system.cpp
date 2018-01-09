@@ -77,6 +77,8 @@ void Rover::init_ardupilot()
     // setup telem slots with serial ports
     gcs().setup_uarts(serial_manager);
 
+    sonar.init(serial_manager, ahrs);
+
     // setup frsky telemetry
 #if FRSKY_TELEM_ENABLED == ENABLED
     frsky_telemetry.init(serial_manager, fwver.fw_string, MAV_TYPE_GROUND_ROVER);

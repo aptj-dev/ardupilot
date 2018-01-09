@@ -36,6 +36,7 @@
 #include <AP_BoardConfig/AP_BoardConfig_CAN.h>
 #include <AP_Buffer/AP_Buffer.h>                    // FIFO buffer library
 #include <AP_Button/AP_Button.h>
+#include <AP_Sonar/AP_Sonar.h>
 #include <AP_Camera/AP_Camera.h>                    // Camera triggering
 #include <AP_Compass/AP_Compass.h>                  // ArduPilot Mega Magnetometer Library
 #include <AP_Declination/AP_Declination.h>          // Compass declination library
@@ -211,6 +212,12 @@ private:
 
     // The rover's current location
     struct Location current_loc;
+    // sonar
+    int32_t gpmtw;
+    int32_t gpdpt;
+    int32_t gpvhw_w;
+    uint16_t gpvhw_h;
+    uint16_t gpmda;
 
     // Camera
 #if CAMERA == ENABLED
@@ -290,6 +297,8 @@ private:
 
     // Battery Sensors
     AP_BattMonitor battery;
+
+    AP_Sonar sonar;
 
 #if FRSKY_TELEM_ENABLED == ENABLED
     // FrSky telemetry support
@@ -412,6 +421,7 @@ private:
     void update_GPS_50Hz(void);
     void update_GPS_10Hz(void);
     void update_current_mode(void);
+    
 
     // capabilities.cpp
     void init_capabilities(void);
@@ -485,6 +495,9 @@ private:
     void send_attitude(mavlink_channel_t chan);
     void send_extended_status1(mavlink_channel_t chan);
     void send_location(mavlink_channel_t chan);
+
+    void send_sonar(mavlink_channel_t chan);
+
     void send_nav_controller_output(mavlink_channel_t chan);
     void send_servo_out(mavlink_channel_t chan);
     void send_vfr_hud(mavlink_channel_t chan);
@@ -571,6 +584,7 @@ private:
     bool disarm_motors(void);
     void smart_rtl_update();
     bool is_boat() const;
+    void update_sonar();
 
 public:
     void mavlink_delay_cb();

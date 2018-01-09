@@ -127,6 +127,37 @@ void Rover::send_location(mavlink_channel_t chan)
         ahrs.yaw_sensor);
 }
 
+void Rover::send_sonar(mavlink_channel_t chan)
+{
+    uint32_t fix_time;
+    // if we have a GPS fix, take the time as the last fix time. That
+    // allows us to correctly calculate velocities and extrapolate
+    // positions.
+    // If we don't have a GPS fix then we are dead reckoning, and will
+    // use the current boot time as the fix time.
+    if (gps.status() >= AP_GPS::GPS_OK_FIX_2D) {
+        fix_time = gps.last_fix_time_ms();
+    } else {
+        fix_time = millis();
+    }
+
+    mavlink_msg_sonar_raw_int_send(
+        chan,
+        fix_time,
+        gpmtw,    // in 1E2 degrees
+        gpdpt,    // in mm
+        gpvhw_w,  // m / sec
+        gpvhw_h,  // in degrees
+        gpmda);   // in 1E2 degrees
+
+static int cnt = 0;
+if((cnt % 10) == 0){
+ // printf("send_sonar gpmtw =[ %d]\n", gpmtw++);
+}
+cnt++;
+}
+
+
 void Rover::send_nav_controller_output(mavlink_channel_t chan)
 {
     mavlink_msg_nav_controller_output_send(
@@ -311,6 +342,11 @@ bool GCS_MAVLINK_Rover::try_send_message(enum ap_message id)
     case MSG_LOCATION:
         CHECK_PAYLOAD_SIZE(GLOBAL_POSITION_INT);
         rover.send_location(chan);
+        break;
+
+    case MSG_SONAR:
+        CHECK_PAYLOAD_SIZE(SONAR_RAW_INT);
+        rover.send_sonar(chan);
         break;
 
     case MSG_LOCAL_POSITION:
@@ -563,6 +599,7 @@ GCS_MAVLINK_Rover::data_stream_send(void)
 
     if (stream_trigger(STREAM_POSITION)) {
         // sent with GPS read
+        send_message(MSG_SONAR);
         send_message(MSG_LOCATION);
         send_message(MSG_LOCAL_POSITION);
     }

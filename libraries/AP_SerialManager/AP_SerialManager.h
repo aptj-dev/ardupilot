@@ -104,7 +104,8 @@ public:
         SerialProtocol_Aerotenna_uLanding      = 12, // Ulanding support
         SerialProtocol_Beacon = 13,
         SerialProtocol_Volz = 14,                    // Volz servo protocol
-        SerialProtocol_Sbus1 = 15
+        SerialProtocol_Sbus1 = 15,
+        SerialProtocol_Sonar_Dst800 = 16,
     };
 
     // get singleton instance

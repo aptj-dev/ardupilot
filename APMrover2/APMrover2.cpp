@@ -69,6 +69,7 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK(update_events,          50,   1000),
     SCHED_TASK(check_usb_mux,           3,   1000),
     SCHED_TASK(mount_update,           50,    600),
+    SCHED_TASK(update_sonar,           50,    600),
     SCHED_TASK(update_trigger,         50,    600),
     SCHED_TASK(gcs_failsafe_check,     10,    600),
     SCHED_TASK(compass_accumulate,     50,    900),

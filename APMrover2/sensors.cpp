@@ -55,6 +55,16 @@ void Rover::init_rangefinder(void)
     rangefinder.init();
 }
 
+void Rover::update_sonar()
+{
+    sonar.update();
+
+    sonar.get_data(gpmtw, gpdpt, gpvhw_w, gpvhw_h, gpmda);
+
+
+
+}
+
 // init beacons used for non-gps position estimates
 void Rover::init_beacon()
 {
